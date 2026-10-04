@@ -9,7 +9,7 @@
  * Tracing results are exported to properties.trace (ignored on import).
  */
 import type { LineKind, LngLat, MapView, NodeKind, Role, Scheme, SchemeLine, SchemeNode } from './types';
-import { centroid, createNode, distanceMeters, emptyScheme } from './scheme';
+import { centroid, createNode, distanceMeters, emptyScheme, normalizeAngle } from './scheme';
 import type { TraceResult } from '../topology/trace';
 import { wireKey } from '../topology/trace';
 
@@ -247,6 +247,8 @@ function sanitizeNode(node: SchemeNode): void {
       }
       delete (node as unknown as Json).hasLighting;
       node.hasInternet = !!node.hasInternet;
+      node.fiberBox = !!node.fiberBox;
+      node.azimuth = Number.isFinite(Number(node.azimuth)) && node.azimuth !== null ? normalizeAngle(Number(node.azimuth)) : null;
       break;
     case 'entry':
       node.houseId = node.houseId ? str(node.houseId) : null;

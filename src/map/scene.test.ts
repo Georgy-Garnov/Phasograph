@@ -58,3 +58,18 @@ describe('buildScene', () => {
     expect(preview.get('preview:line')!.geometry.coordinates[0]).toEqual(ktp.coords);
   });
 });
+
+describe('wire order follows pole orientation', () => {
+  it('mirrors the parallel wires when the pole faces against the span', () => {
+    const { s, line } = state();
+    const offsets = () =>
+      line.wires.map((w) => buildScene(s, new Set(), 18).features.get(`wire:${wireKey(line.id, w.id)}`)!.geometry.coordinates[0][1] as number);
+    const before = offsets();
+    const pole = s.scheme.nodes[line.to] as { azimuth: number | null };
+    pole.azimuth = 270; // the span runs east, the pole now faces west
+    const after = offsets();
+    // Every wire moves to the mirrored offset across the span axis (latitude 55.7 for an east-west span).
+    after.forEach((lat, i) => expect(lat - 55.7).toBeCloseTo(-(before[i] - 55.7), 9));
+    expect(after).not.toEqual(before);
+  });
+});

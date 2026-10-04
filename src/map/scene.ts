@@ -3,9 +3,9 @@
  * Adapters (Leaflet, Yandex) just apply it by comparing object "signatures".
  */
 import type { AppState } from '../model/store';
-import type { LngLat, SchemeLine, SchemeNode, Wire } from '../model/types';
+import type { Scheme, LngLat, SchemeLine, SchemeNode, Wire } from '../model/types';
 import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS } from '../model/constants';
-import { isPole, isWired, sortInsulators } from '../model/scheme';
+import { bearing, destination, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
 import { t } from '../i18n';
@@ -64,7 +64,48 @@ export function buildScene(state: AppState, highlighted: Set<string>, zoom: numb
   const features = new Map<string, FeatureSpec>();
   collectLines(state, highlighted, zoom, features);
   collectContours(state, features);
-  return { markers: buildMarkers(state), features };
+  return { markers: [...buildMarkers(state), ...buildOrientation(state, zoom)], features };
+}
+
+/** Distance of the rotation handle from the pole, in screen pixels. */
+const ROTATE_HANDLE_PX = 34;
+
+/**
+ * Orientation of the selected pole: a disc split into a blue left half and a red right half with a
+ * "forward" arrow, plus a draggable handle to rotate the pole. Marker ids: `orient:<poleId>`, `rot:<poleId>`.
+ */
+function buildOrientation(state: AppState, zoom: number): MarkerSpec[] {
+  const sel = state.selection;
+  const pole = sel?.type === 'node' ? state.scheme.nodes[sel.id] : undefined;
+  if (!isPole(pole)) return [];
+  const committed = poleAzimuth(state.scheme, pole);
+  const preview = state.rotatePreview?.poleId === pole.id ? state.rotatePreview.azimuth : committed;
+  const draggable = state.tool.type === 'select';
+  const handleAt = destination(pole.coords, committed, ROTATE_HANDLE_PX * metersPerPixel(zoom, pole.coords[1]));
+  const markers: MarkerSpec[] = [
+    {
+      id: `orient:${pole.id}`,
+      coords: pole.coords,
+      className: 'pole-orient',
+      html: `<span class="pole-orient-disc" style="transform: translate(-50%, -50%) rotate(${preview}deg)"><i></i></span>`,
+      title: '',
+      draggable: false,
+      zIndex: 5,
+    },
+  ];
+  if (draggable) {
+    markers.push({
+      id: `rot:${pole.id}`,
+      // While dragging, the handle keeps its committed position so re-renders do not fight the drag.
+      coords: handleAt,
+      className: 'pole-rotate-handle',
+      html: '↻',
+      title: t('pole.rotateHandle'),
+      draggable: true,
+      zIndex: 30,
+    });
+  }
+  return markers;
 }
 
 /** Temporary drawing objects: rubber-band line and house outline. */
@@ -119,6 +160,8 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       classes.push('has-lamp');
       lampHtml = `<span class="lamp${off ? ' lamp-off' : ''}" title="${escapeHtml(t('scene.lamps', { n: node.lamps.length }))}">✹${node.lamps.length > 1 ? node.lamps.length : ''}</span>`;
     }
+    const fiberHtml =
+      isPole(node) && node.fiberBox ? `<span class="fiber-mark" title="${escapeHtml(t('pole.fiberBox'))}"></span>` : '';
     const photoCount = photoCounts.get(node.id) ?? 0;
     const photoHtml = photoCount
       ? `<span class="photo-mark" title="${escapeHtml(t('scene.photos', { n: photoCount }))}">📷</span>`
@@ -127,7 +170,7 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       id: node.id,
       coords: node.coords,
       className: classes.join(' '),
-      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}`,
+      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}`,
       title: node.kind === 'house' ? node.address || node.name : node.name,
       draggable: tool.type === 'select',
       zIndex: node.kind === 'house' ? 10 : 20,
@@ -175,7 +218,7 @@ function collectLines(state: AppState, highlighted: Set<string>, zoom: number, s
       continue;
     }
 
-    const ordered = orderWires(line, a, b);
+    const ordered = orderWires(scheme, line, a, b);
     const px = line.kind === 'drop' ? 3 : zoom >= DENSE_ZOOM ? 5 : 2;
     const spacing = px * metersPerPixel(zoom, a.coords[1]);
     const width = line.kind === 'drop' ? 2 : 3;
@@ -203,8 +246,10 @@ function collectLines(state: AppState, highlighted: Set<string>, zoom: number, s
  * Wire order across the line: left insulators (top to bottom), then right ones.
  * Taken from the pole at the span start; if the start is a substation, from the pole at the end, so wires do not cross.
  */
-function orderWires(line: SchemeLine, from: SchemeNode, to: SchemeNode) {
+function orderWires(scheme: Scheme, line: SchemeLine, from: SchemeNode, to: SchemeNode) {
   const pole = isPole(from) ? from : isPole(to) ? to : null;
+  // If the pole faces against the span's direction of travel, its left side is on the travel's right.
+  const facingAgainst = pole ? angleDiff(poleAzimuth(scheme, pole), bearing(from.coords, to.coords)) > 90 : false;
   const portOf = (w: Wire) => (pole === from ? w.fromPort : w.toPort) ?? '';
   const rank = new Map<string, number>();
   if (pole) {
@@ -213,7 +258,14 @@ function orderWires(line: SchemeLine, from: SchemeNode, to: SchemeNode) {
     const right = sortInsulators(pole.insulators.filter((i) => i.side === 'R'));
     [...left, ...center, ...right].forEach((ins, i) => rank.set(ins.id, i));
   }
-  return [...line.wires].sort((x, y) => (rank.get(portOf(x)) ?? 999) - (rank.get(portOf(y)) ?? 999));
+  const sorted = [...line.wires].sort((x, y) => (rank.get(portOf(x)) ?? 999) - (rank.get(portOf(y)) ?? 999));
+  return facingAgainst ? sorted.reverse() : sorted;
+}
+
+/** Smallest absolute difference between two bearings, 0..180°. */
+function angleDiff(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
 }
 
 function wholeLineColor(line: SchemeLine, trace: TraceResult): string {

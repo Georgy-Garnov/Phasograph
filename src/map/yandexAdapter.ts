@@ -68,6 +68,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
         draggable: spec.draggable,
         zIndex: spec.zIndex,
         onClick: (e) => this.events.markerClick(id, clickedPart(e)),
+        onDragMove: (coords) => this.events.markerDrag(id, coords as LngLat),
         onDragEnd: (coords) => this.events.markerDragEnd(id, coords as LngLat),
       },
       el,

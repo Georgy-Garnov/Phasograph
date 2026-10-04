@@ -102,6 +102,7 @@ export class LeafletAdapter extends DiffingAdapter<MarkerHandle, FeatureHandle> 
     });
     const id = spec.id;
     marker.on('click', (e) => this.events.markerClick(id, clickedPart(e.originalEvent)));
+    marker.on('drag', () => this.events.markerDrag(id, toLngLat(marker.getLatLng())));
     marker.on('dragend', () => this.events.markerDragEnd(id, toLngLat(marker.getLatLng())));
     marker.addTo(this.map);
     return { marker, el };

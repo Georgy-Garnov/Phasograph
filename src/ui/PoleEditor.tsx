@@ -7,11 +7,13 @@ import {
   isZigzag,
   layoutZigzag,
   linesAt,
+  poleAzimuth,
   removeInsulator,
   sortInsulators,
   uid,
 } from '../model/scheme';
 import { portKey } from '../topology/trace';
+import { setPoleAzimuth } from '../map/interactions';
 import { PoleDiagram } from './PoleDiagram';
 import { LampsSection } from './LampsSection';
 import { Field, KtpDistanceInfo, MarkSelect, NodeLink, Section, TraceChip, editNode, editScheme, nodeName } from './common';
@@ -113,7 +115,16 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
             />
             {t('pole.internet')}
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={pole.fiberBox}
+              onChange={(e) => editNode(pole.id, pole.kind, (p) => void (p.fiberBox = e.target.checked))}
+            />
+            {t('pole.fiberBox')}
+          </label>
         </div>
+        <PoleOrientation pole={pole} />
       </Section>
 
       <Section
@@ -349,5 +360,47 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
         </ul>
       </Section>
     </>
+  );
+}
+
+/** Pole orientation: "forward" azimuth that defines which side is left and right. */
+function PoleOrientation({ pole }: { pole: PoleNode }) {
+  const t = useT();
+  const scheme = useStore((s) => s.scheme);
+  const azimuth = poleAzimuth(scheme, pole);
+  const auto = pole.azimuth === null;
+  return (
+    <div className="pole-orientation">
+      <div className="row">
+        <span className="orient-legend" aria-hidden>
+          <i className="left" />
+          <i className="right" />
+        </span>
+        <span>{t('pole.azimuth')}</span>
+        <button className="icon" title={t('pole.rotateLeft')} onClick={() => setPoleAzimuth(pole.id, azimuth - 15)}>
+          ⟲
+        </button>
+        <input
+          type="number"
+          className="num"
+          min={0}
+          max={359}
+          value={azimuth}
+          onChange={(e) => setPoleAzimuth(pole.id, Number(e.target.value) || 0)}
+        />
+        °
+        <button className="icon" title={t('pole.rotateRight')} onClick={() => setPoleAzimuth(pole.id, azimuth + 15)}>
+          ⟳
+        </button>
+        {auto ? (
+          <span className="muted small">{t('pole.azimuthAuto')}</span>
+        ) : (
+          <button className="link" onClick={() => setPoleAzimuth(pole.id, null)} title={t('pole.azimuthResetTitle')}>
+            {t('pole.azimuthReset')}
+          </button>
+        )}
+      </div>
+      <p className="muted small">{t('pole.orientHelp')}</p>
+    </div>
   );
 }

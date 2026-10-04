@@ -1,6 +1,8 @@
 import type { Insulator, PoleNode } from '../model/types';
 import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, ROLE_COLORS } from '../model/constants';
 import { insLabel } from '../i18n/labels';
+import { linesAt } from '../model/scheme';
+import { useStore } from '../model/store';
 import { useT } from '../i18n';
 import { portKey, type TraceResult } from '../topology/trace';
 
@@ -30,10 +32,14 @@ const ARM = 95;
  */
 export function PoleDiagram({ pole, trace, selected = [], pending = null, onClick, tags = {} }: Props) {
   const tr = useT();
+  const scheme = useStore((s) => s.scheme);
   const levels = Math.max(1, ...pole.insulators.map((i) => i.position));
   // Space above the insulators is reserved for luminaires.
   const lampSpace = pole.lamps.length ? 34 : 0;
-  const height = levels * ROW_H + 40 + lampSpace;
+  // Fiber cable hangs at the very bottom, below all insulators.
+  const showFiber = pole.hasInternet || pole.fiberBox || linesAt(scheme, pole.id).some((l) => l.kind === 'fiber');
+  const fiberSpace = showFiber ? 30 : 0;
+  const height = levels * ROW_H + 40 + lampSpace + fiberSpace;
   // Side margins for "L5 Ph? ✎" labels: width is based on the longest label so it is not clipped.
   const labelPx = (i: Insulator) => labelText(i, roleText(i)).length * 7 + (i.mark ? 14 : 0);
   const longest = Math.max(30, ...pole.insulators.map(labelPx));
@@ -41,7 +47,8 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
   const margin = Math.max(0, longest + 16 + 6 - 18);
   const width = ARM * 2 + 2 * margin + 10;
   const cx = width / 2;
-  const y = (pos: number) => height - 20 - (pos - 0.5) * ROW_H;
+  const y = (pos: number) => height - 20 - fiberSpace - (pos - 0.5) * ROW_H;
+  const yFiber = height - 18;
   const xOf = (ins: Insulator) => (ins.side === 'L' ? cx - ARM + 18 : ins.side === 'R' ? cx + ARM - 18 : cx);
 
   function roleText(ins: Insulator): string {
@@ -194,6 +201,23 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
           </g>
         );
       })}
+
+      {showFiber && (
+        <g className="fiber">
+          <title>{tr('diagram.fiber')}</title>
+          <line x1={cx - ARM} x2={cx + ARM} y1={yFiber} y2={yFiber} stroke="#00a3a3" strokeWidth={3} strokeDasharray="2 5" strokeLinecap="round" />
+          <text x={cx - ARM} y={yFiber - 6} fontSize={10} fill="#007f7f" fontWeight={600}>
+            {tr('diagram.fiber')}
+          </text>
+          {pole.fiberBox && (
+            <g>
+              <title>{tr('pole.fiberBox')}</title>
+              <rect x={cx + 8} y={yFiber - 12} width={20} height={16} rx={2} fill="#00a3a3" stroke="#006b6b" />
+              <line x1={cx + 8} x2={cx + 28} y1={yFiber - 6} y2={yFiber - 6} stroke="#e0ffff" strokeWidth={1} />
+            </g>
+          )}
+        </g>
+      )}
 
       {pole.insulators.length === 0 && (
         <text x={cx} y={height / 2} textAnchor="middle" fontSize={12} fill="#888">

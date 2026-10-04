@@ -89,6 +89,13 @@ export interface PoleNode extends NodeBase {
   /** Street lighting luminaires on the pole. */
   lamps: Lamp[];
   hasInternet: boolean;
+  /** A fiber splice/junction box is mounted on the pole. */
+  fiberBox: boolean;
+  /**
+   * Direction "forward along the line" in degrees clockwise from north; left/right insulator sides are
+   * relative to it. null — derived automatically from the spans at the pole (see poleAzimuth).
+   */
+  azimuth: number | null;
 }
 
 /** Connection point (service entry) on the house facade. */

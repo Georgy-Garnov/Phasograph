@@ -408,3 +408,63 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 .ins-table td select { max-width: 84px; text-overflow: ellipsis; }
 .ins-table input.num { width: 38px; }
 .ins-table button.icon { padding: 0 4px; }
+
+/* ---- Pole orientation on the map ---- */
+.pole-orient { position: absolute; pointer-events: none; }
+.pole-orient-disc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  /* Unrotated, "forward" points up: left half blue, right half red. */
+  background: linear-gradient(to right, rgba(30, 91, 216, 0.55) 50%, rgba(214, 40, 40, 0.55) 50%);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.pole-orient-disc i {
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 9px solid #1d2329;
+}
+.pole-rotate-handle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #1f6feb;
+  color: #1f6feb;
+  font: 700 14px/18px system-ui, sans-serif;
+  text-align: center;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  touch-action: none;
+}
+.pole-orientation { margin-top: 6px; }
+.pole-orientation .row { flex-wrap: wrap; }
+.pole-orientation input.num { width: 52px; }
+.orient-legend { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; overflow: hidden; border: 1px solid #999; }
+.orient-legend i { flex: 1; }
+.orient-legend .left { background: #1e5bd8; }
+.orient-legend .right { background: #d62828; }
+.node .fiber-mark {
+  position: absolute;
+  right: 100%;
+  top: 70%;
+  margin-right: 1px;
+  width: 8px;
+  height: 7px;
+  background: #00a3a3;
+  border: 1px solid #fff;
+  border-radius: 1px;
+  pointer-events: none;
+}

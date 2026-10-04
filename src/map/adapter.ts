@@ -12,6 +12,8 @@ export interface MapEvents {
   viewChange(view: MapView): void;
   /** part = 'lamp' — the click hit the luminaire icon on a pole. */
   markerClick(id: string, part?: 'lamp'): void;
+  /** Fired continuously while a marker is dragged. */
+  markerDrag(id: string, coords: LngLat): void;
   markerDragEnd(id: string, coords: LngLat): void;
   featureClick(target: FeatureTarget, coords: LngLat): void;
 }

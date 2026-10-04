@@ -14,6 +14,8 @@ import {
   handleMapClick,
   handleNodeClick,
   moveNode,
+  previewPoleRotation,
+  rotatePoleTowards,
 } from './interactions';
 
 /** Map access from other parts of the UI (flying to an object, etc.). */
@@ -92,8 +94,16 @@ export function MapView() {
         if (Math.abs(z - renderedZoom) > 0.3) draw();
       },
       viewChange: (view) => store.set({ view }),
-      markerClick: handleNodeClick,
-      markerDragEnd: moveNode,
+      markerClick: (id, part) => {
+        if (!id.startsWith('rot:') && !id.startsWith('orient:')) handleNodeClick(id, part);
+      },
+      markerDrag: (id, coords) => {
+        if (id.startsWith('rot:')) previewPoleRotation(id.slice(4), coords);
+      },
+      markerDragEnd: (id, coords) => {
+        if (id.startsWith('rot:')) rotatePoleTowards(id.slice(4), coords);
+        else moveNode(id, coords);
+      },
       featureClick: handleFeatureClick,
     };
 
@@ -119,6 +129,7 @@ export function MapView() {
           s.lineStart !== prev.lineStart ||
           s.contour !== prev.contour ||
           s.photos !== prev.photos ||
+          s.rotatePreview !== prev.rotatePreview ||
           s.settings.lang !== prev.settings.lang;
         prev = s;
         if (changed) draw();

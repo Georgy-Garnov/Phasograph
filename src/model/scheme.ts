@@ -54,7 +54,17 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
     case 'pole04':
     case 'pole10':
     case 'poleService':
-      return { ...base, kind, number: '', insulators: [], jumpers: [], lamps: [], hasInternet: false };
+      return {
+        ...base,
+        kind,
+        number: '',
+        insulators: [],
+        jumpers: [],
+        lamps: [],
+        hasInternet: false,
+        fiberBox: false,
+        azimuth: null,
+      };
     case 'entry':
       return { ...base, kind, houseId: null };
     case 'house':
@@ -465,4 +475,41 @@ export function addLamp(pole: PoleNode, roleOf: (insulatorId: string) => Role | 
   const lamp: Lamp = { id: uid('lamp'), kind: 'led', powerW: '', phasePort: find('L'), neutralPort: find('N') };
   pole.lamps.push(lamp);
   return lamp;
+}
+
+// ---------- Pole orientation ----------
+
+const DEG = Math.PI / 180;
+
+export function normalizeAngle(deg: number): number {
+  return ((Math.round(deg) % 360) + 360) % 360;
+}
+
+/** Initial bearing from a to b in degrees clockwise from north (planar approximation, fine for spans). */
+export function bearing(a: LngLat, b: LngLat): number {
+  const dx = (b[0] - a[0]) * Math.cos(a[1] * DEG);
+  const dy = b[1] - a[1];
+  return normalizeAngle(Math.atan2(dx, dy) / DEG);
+}
+
+/** Point at the given distance (meters) and bearing from a (planar approximation). */
+export function destination(a: LngLat, bearingDeg: number, meters: number): LngLat {
+  const dLat = (meters * Math.cos(bearingDeg * DEG)) / 110540;
+  const dLng = (meters * Math.sin(bearingDeg * DEG)) / (111320 * Math.cos(a[1] * DEG));
+  return [a[0] + dLng, a[1] + dLat];
+}
+
+/**
+ * Effective "forward" direction of a pole: the manual azimuth, otherwise the direction the line arrives
+ * from (span drawn from the substation side towards this pole), otherwise the outgoing span direction.
+ */
+export function poleAzimuth(scheme: Scheme, pole: PoleNode): number {
+  if (pole.azimuth !== null && pole.azimuth !== undefined) return normalizeAngle(pole.azimuth);
+  const lines = linesAt(scheme, pole.id).filter((l) => l.kind !== 'drop' && l.kind !== 'fiber');
+  const preferred = [...lines].sort((a, b) => (a.kind === 'line04' ? -1 : 0) - (b.kind === 'line04' ? -1 : 0));
+  const incoming = preferred.find((l) => l.to === pole.id && scheme.nodes[l.from]);
+  if (incoming) return bearing(scheme.nodes[incoming.from].coords, pole.coords);
+  const outgoing = preferred.find((l) => l.from === pole.id && scheme.nodes[l.to]);
+  if (outgoing) return bearing(pole.coords, scheme.nodes[outgoing.to].coords);
+  return 0;
 }

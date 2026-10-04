@@ -94,6 +94,8 @@ export interface AppState {
   selectedLamp: string | null;
   /** Terminal from which the conductor is highlighted. */
   focusKey: string | null;
+  /** Live azimuth while the pole rotation handle is being dragged (not in undo history until dropped). */
+  rotatePreview: { poleId: string; azimuth: number } | null;
   view: MapView;
   settings: Settings;
   /** Hint/message in the status bar. */
@@ -119,6 +121,7 @@ let state: AppState = {
   contour: [],
   focusKey: null,
   selectedLamp: null,
+  rotatePreview: null,
   view: DEFAULT_VIEW,
   settings: loadSettings(),
   hint: null,

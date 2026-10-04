@@ -2,6 +2,8 @@
 import { store, type Tool } from '../model/store';
 import {
   addLamp,
+  bearing,
+  normalizeAngle,
   centroid,
   createLine,
   createNode,
@@ -373,4 +375,30 @@ export function removeLamp(poleId: string, lampId: string) {
 export function focusedWires(): Set<string> {
   const { focusKey, trace } = store.get();
   return focusKey ? highlightWires(trace, focusKey) : new Set();
+}
+
+// ---------- Pole orientation ----------
+
+/** Live rotation while the handle is dragged: only the preview, no undo step. */
+export function previewPoleRotation(poleId: string, towards: LngLat) {
+  const pole = store.get().scheme.nodes[poleId];
+  if (isPole(pole)) store.set({ rotatePreview: { poleId, azimuth: bearing(pole.coords, towards) } });
+}
+
+/** Commits the pole azimuth so that "forward" points at the given map point. */
+export function rotatePoleTowards(poleId: string, towards: LngLat) {
+  const pole = store.get().scheme.nodes[poleId];
+  if (!isPole(pole)) return;
+  setPoleAzimuth(poleId, bearing(pole.coords, towards));
+}
+
+/** Sets (or with null — resets to automatic) the pole azimuth. */
+export function setPoleAzimuth(poleId: string, azimuth: number | null) {
+  store.edit(
+    (d) => {
+      const p = d.nodes[poleId];
+      if (isPole(p)) p.azimuth = azimuth === null ? null : normalizeAngle(azimuth);
+    },
+    { patch: { rotatePreview: null } },
+  );
 }
