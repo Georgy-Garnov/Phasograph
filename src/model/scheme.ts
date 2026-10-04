@@ -525,3 +525,42 @@ export function poleAzimuth(scheme: Scheme, pole: PoleNode): number {
   if (outgoing) return bearing(pole.coords, scheme.nodes[outgoing.to].coords);
   return 0;
 }
+
+// ---------- Routes ----------
+
+/**
+ * Spans of the same route as the given one: lines of the same kind and suspension connected through poles
+ * (never through a substation). If `feedersOf` is given and the start line is traced, only lines sharing
+ * at least one feeder with it are included, so parallel feeders on shared poles stay separate.
+ */
+export function routeLines(scheme: Scheme, lineId: string, feedersOf?: (line: SchemeLine) => string[]): string[] {
+  const start = scheme.lines[lineId];
+  if (!start) return [];
+  const startFeeders = new Set(feedersOf?.(start) ?? []);
+  const sameRoute = (l: SchemeLine) => {
+    if (l.kind !== start.kind || l.suspension !== start.suspension) return false;
+    if (!startFeeders.size) return true;
+    return (feedersOf?.(l) ?? []).some((f) => startFeeders.has(f));
+  };
+  const byNode = new Map<string, SchemeLine[]>();
+  for (const l of Object.values(scheme.lines)) {
+    if (!sameRoute(l)) continue;
+    byNode.set(l.from, [...(byNode.get(l.from) ?? []), l]);
+    byNode.set(l.to, [...(byNode.get(l.to) ?? []), l]);
+  }
+  const found = new Set<string>([start.id]);
+  const queue = [start];
+  while (queue.length) {
+    const l = queue.shift()!;
+    for (const nodeId of [l.from, l.to]) {
+      if (!isPole(scheme.nodes[nodeId])) continue; // stop at substations, houses, entries
+      for (const next of byNode.get(nodeId) ?? []) {
+        if (!found.has(next.id)) {
+          found.add(next.id);
+          queue.push(next);
+        }
+      }
+    }
+  }
+  return [...found];
+}

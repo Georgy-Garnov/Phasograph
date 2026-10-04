@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { store, useStore } from '../model/store';
 import type { PoleNode, SchemeLine, SchemeNode, Suspension } from '../model/types';
-import { addWire, assignFeeder, houseOf, isPole, isWired, mapWiresByPosition } from '../model/scheme';
+import { addWire, assignFeeder, houseOf, isPole, isWired, mapWiresByPosition, routeLines } from '../model/scheme';
 import { formatLength, lineKindLabel, portOptions } from '../i18n/labels';
 import { t as tr, useT, type MessageKey } from '../i18n';
 import { CONDUCTORS, CONDUCTOR_GROUPS, conductorsOf, defaultConductorId } from '../model/conductors';
@@ -84,6 +84,40 @@ function WireMark({ line, wireIndex }: { line: SchemeLine; wireIndex: number }) 
   );
 }
 
+/** Copies the span's conductor (and its mark, if filled) to every span of the same route. */
+function ApplyToRoute({ line }: { line: SchemeLine }) {
+  const t = useT();
+  const scheme = useStore((s) => s.scheme);
+  const trace = useStore((s) => s.trace);
+  if (line.kind !== 'line04') return null;
+  const feedersOf = (l: SchemeLine) => [...new Set(l.wires.flatMap((w) => trace.wires.get(wireKey(l.id, w.id))?.feeders ?? []))];
+  const ids = routeLines(scheme, line.id, feedersOf);
+  if (ids.length < 2) return null;
+  const name = CONDUCTORS[line.conductor ?? defaultConductorId(line)].label;
+  return (
+    <button
+      className="link small"
+      onClick={() => {
+        const msg = line.mark.trim()
+          ? t('line.applyRouteConfirmMark', { name, mark: line.mark.trim(), n: ids.length })
+          : t('line.applyRouteConfirm', { name, n: ids.length });
+        if (!confirm(msg)) return;
+        editScheme((d) => {
+          for (const id of ids) {
+            const l = d.lines[id];
+            if (!l) continue;
+            l.conductor = line.conductor;
+            if (line.mark.trim()) l.mark = line.mark;
+          }
+        });
+        store.set({ hint: t('line.applyRouteDone', { n: ids.length }) });
+      }}
+    >
+      {t('line.applyRoute', { n: ids.length })}
+    </button>
+  );
+}
+
 /** Service drop wire labels. */
 function dropWireLabel(line: SchemeLine, i: number): string {
   if (line.wires.length === 2) return i === 0 ? tr('drop.wire.phase') : tr('drop.wire.neutral');
@@ -154,6 +188,7 @@ export function LineEditor({ line }: { line: SchemeLine }) {
                   </optgroup>
                 ))}
               </select>
+              <ApplyToRoute line={line} />
             </Field>
           )}
         </div>
