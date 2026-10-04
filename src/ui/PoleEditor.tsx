@@ -124,6 +124,9 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
             <button onClick={() => add('C')} title={t('pole.addCenterTitle')}>
               {t('pole.addCenter')}
             </button>
+            <button onClick={() => add('B')} title={t('pole.addBackTitle')}>
+              {t('pole.addBack')}
+            </button>
             <button onClick={() => add('R')}>{t('pole.addRight')}</button>
             <button onClick={() => add('R', 'sipClamp')} title={t('pole.addSipTitle')}>
               {t('pole.addSip')}
@@ -224,6 +227,7 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                   >
                     <option value="L">{t('side.L')}</option>
                     <option value="C">{t('side.C')}</option>
+                    <option value="B">{t('side.B')}</option>
                     <option value="R">{t('side.R')}</option>
                   </select>
                 </td>

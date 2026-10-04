@@ -209,7 +209,7 @@ function orderWires(line: SchemeLine, from: SchemeNode, to: SchemeNode) {
   const rank = new Map<string, number>();
   if (pole) {
     const left = sortInsulators(pole.insulators.filter((i) => i.side === 'L')).reverse();
-    const center = sortInsulators(pole.insulators.filter((i) => i.side === 'C'));
+    const center = sortInsulators(pole.insulators.filter((i) => i.side === 'C' || i.side === 'B'));
     const right = sortInsulators(pole.insulators.filter((i) => i.side === 'R'));
     [...left, ...center, ...right].forEach((ins, i) => rank.set(ins.id, i));
   }

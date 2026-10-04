@@ -228,7 +228,7 @@ function sanitizeNode(node: SchemeNode): void {
       node.number = str(node.number);
       node.insulators = arr<Json>(node.insulators).map((i, k) => ({
         id: str(i.id, `ins${k + 1}`),
-        side: i.side === 'R' || i.side === 'C' ? i.side : 'L',
+        side: i.side === 'R' || i.side === 'C' || i.side === 'B' ? i.side : 'L',
         position: Number(i.position) || k + 1,
         type: i.type === 'sipClamp' ? 'sipClamp' : 'pin',
         ...(ROLES.includes(i.mark as Role) ? { mark: i.mark as Role } : {}),

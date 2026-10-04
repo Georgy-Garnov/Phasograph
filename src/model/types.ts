@@ -43,10 +43,10 @@ export interface KtpNode extends NodeBase {
 }
 
 /**
- * Insulator position: left/right of the pole axis (along the line) or center — on the pole body
- * (e.g. a branch on a T-shaped pole).
+ * Insulator position: left/right of the pole axis (along the line), center — on the front of the pole body
+ * (e.g. a branch on a T-shaped pole), or back — on the opposite face, behind the pole.
  */
-export type Side = 'L' | 'R' | 'C';
+export type Side = 'L' | 'R' | 'C' | 'B';
 /** pin — pin insulator/hook for a separate wire; sipClamp — anchor/suspension clamp for an ABC bundle. */
 export type InsulatorType = 'pin' | 'sipClamp';
 

@@ -58,9 +58,73 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
     return t.bundledRoles.length ? COLOR_BUNDLE : COLOR_UNTRACED;
   };
 
+  const renderInsulator = (ins: Insulator) => {
+      const color = colorOf(ins);
+      const x = xOf(ins);
+      const yy = y(ins.position);
+      const isSel = selected.includes(ins.id) || pending === ins.id;
+      const strokeColor = pending === ins.id ? '#ff7a00' : isSel ? '#008cff' : '#222';
+      const role = roleText(ins);
+        const back = ins.side === 'B';
+    // Labels: left-side and back ones go left of the insulator, right-side and center ones go right.
+    const labelX = ins.side === 'L' || back ? x - 16 : x + 16;
+      return (
+        <g
+        key={ins.id}
+        className={back ? 'insulator back' : 'insulator'}
+        onClick={() => onClick?.(ins.id)}
+        style={{ cursor: onClick ? 'pointer' : 'default' }}
+      >
+          <title>{`${insLabel(ins)}${role ? ` — ${role}` : ''}`}</title>
+          {ins.type === 'sipClamp' ? (
+            <rect x={x - 12} y={yy - 6} width={24} height={14} rx={4} fill={color} stroke={strokeColor} strokeWidth={isSel ? 4 : 1} />
+          ) : (
+            <>
+              {ins.side === 'C' || back ? (
+                <rect x={x - 7} y={yy + 4} width={14} height={4} fill="#555" />
+              ) : (
+                <rect x={x - 3} y={yy} width={6} height={9} fill="#555" />
+              )}
+              <ellipse
+            cx={x}
+            cy={yy - 2}
+            rx={11}
+            ry={8}
+            fill={color}
+            stroke={strokeColor}
+            strokeWidth={isSel ? 4 : 1}
+            // Behind the pole: faded with a dashed outline.
+            strokeDasharray={back && !isSel ? '3 2' : undefined}
+            fillOpacity={back ? 0.55 : 1}
+          />
+            </>
+          )}
+          <text
+            x={labelX}
+            y={yy + 2}
+            fontSize={11}
+            textAnchor={ins.side === 'L' || back ? 'end' : 'start'}
+            fill="#222"
+            paintOrder="stroke"
+            stroke="#f8fafc"
+            strokeWidth={3}
+          >
+            {labelText(ins, role)}
+          </text>
+          {tags[ins.id] && (
+            <text x={x} y={yy - 13} fontSize={10} fontWeight={700} textAnchor="middle" fill="#008cff">
+              {tags[ins.id]}
+            </text>
+          )}
+        </g>
+      );
+  };
+
   return (
     <svg className="pole-diagram" viewBox={`0 0 ${width} ${height}`} width="100%" style={{ maxHeight: 340 }}>
-      <rect x={cx - 5} y={6} width={10} height={height - 6} fill="#8d7b68" rx={3} />
+      {/* Back insulators are drawn first so the pole body covers them; the pole itself ignores clicks. */}
+      {pole.insulators.filter((i) => i.side === 'B').map(renderInsulator)}
+      <rect x={cx - 5} y={6} width={10} height={height - 6} fill="#8d7b68" rx={3} pointerEvents="none" />
 
       {/* A bracket for each side insulator; if both sides have insulators at the same height, draw a full crossarm. */}
       {Array.from({ length: levels }, (_, k) => {
@@ -92,50 +156,7 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
         );
       })}
 
-      {pole.insulators.map((ins) => {
-        const color = colorOf(ins);
-        const x = xOf(ins);
-        const yy = y(ins.position);
-        const isSel = selected.includes(ins.id) || pending === ins.id;
-        const strokeColor = pending === ins.id ? '#ff7a00' : isSel ? '#008cff' : '#222';
-        const role = roleText(ins);
-        // Labels: left-side ones go left of the insulator, right-side and center ones go right.
-        const labelX = ins.side === 'L' ? x - 16 : x + 16;
-        return (
-          <g key={ins.id} className="insulator" onClick={() => onClick?.(ins.id)} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-            <title>{`${insLabel(ins)}${role ? ` — ${role}` : ''}`}</title>
-            {ins.type === 'sipClamp' ? (
-              <rect x={x - 12} y={yy - 6} width={24} height={14} rx={4} fill={color} stroke={strokeColor} strokeWidth={isSel ? 4 : 1} />
-            ) : (
-              <>
-                {ins.side === 'C' ? (
-                  <rect x={x - 7} y={yy + 4} width={14} height={4} fill="#555" />
-                ) : (
-                  <rect x={x - 3} y={yy} width={6} height={9} fill="#555" />
-                )}
-                <ellipse cx={x} cy={yy - 2} rx={11} ry={8} fill={color} stroke={strokeColor} strokeWidth={isSel ? 4 : 1} />
-              </>
-            )}
-            <text
-              x={labelX}
-              y={yy + 2}
-              fontSize={11}
-              textAnchor={ins.side === 'L' ? 'end' : 'start'}
-              fill="#222"
-              paintOrder="stroke"
-              stroke="#f8fafc"
-              strokeWidth={3}
-            >
-              {labelText(ins, role)}
-            </text>
-            {tags[ins.id] && (
-              <text x={x} y={yy - 13} fontSize={10} fontWeight={700} textAnchor="middle" fill="#008cff">
-                {tags[ins.id]}
-              </text>
-            )}
-          </g>
-        );
-      })}
+      {pole.insulators.filter((i) => i.side !== 'B').map(renderInsulator)}
 
       {/* Luminaires on brackets near the pole top and their connections to insulators. */}
       {pole.lamps.map((lamp, k) => {

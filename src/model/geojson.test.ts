@@ -17,6 +17,7 @@ describe('GeoJSON', () => {
     ];
     house.meterNumber = '12345';
     for (const n of [ktp, pole, house]) s.nodes[n.id] = n;
+    if (pole.kind === 'pole04') pole.insulators.push({ id: 'back', side: 'B', position: 9, type: 'pin' });
     createLine(s, 'line04', ktp.id, pole.id, 'bare');
     createLine(s, 'drop', pole.id, house.id, 'bare');
 

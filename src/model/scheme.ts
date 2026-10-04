@@ -144,9 +144,9 @@ export function nearestNode(
 
 // ---------- Ports (insulators / substation outputs) ----------
 
-const SIDE_ORDER: Record<Side, number> = { L: 0, C: 1, R: 2 };
+const SIDE_ORDER: Record<Side, number> = { L: 0, C: 1, B: 2, R: 3 };
 /** Default side letters (Russian); the UI passes letters for the current language. */
-export const SIDE_LETTERS: Record<Side, string> = { L: 'Л', C: 'Ц', R: 'П' };
+export const SIDE_LETTERS: Record<Side, string> = { L: 'Л', C: 'Ц', B: 'З', R: 'П' };
 
 /** Bottom to top; at the same height — left, center, right. */
 export function sortInsulators(list: Insulator[]): Insulator[] {
@@ -437,8 +437,8 @@ export function assignFeeder(scheme: Scheme, line: SchemeLine, feederId: string)
 export function layoutZigzag(pole: PoleNode): void {
   const legacyOrder = (list: Insulator[]) =>
     [...list].sort((a, b) => (a.side === b.side ? a.position - b.position : a.side === 'L' ? -1 : 1));
-  // Center insulators (a branch on a T-pole) are left untouched.
-  const sideIns = pole.insulators.filter((i) => i.side !== 'C');
+  // Center and back insulators (on the pole body) are left untouched.
+  const sideIns = pole.insulators.filter((i) => i.side === 'L' || i.side === 'R');
   const pins = legacyOrder(sideIns.filter((i) => i.type === 'pin'));
   const clamps = legacyOrder(sideIns.filter((i) => i.type === 'sipClamp'));
   pins.forEach((ins, i) => {
@@ -450,9 +450,9 @@ export function layoutZigzag(pole: PoleNode): void {
   });
 }
 
-/** Side insulators of the pole are already in a zigzag (no two at the same height); center ones are ignored. */
+/** Side insulators of the pole are already in a zigzag (no two at the same height); center/back ones are ignored. */
 export function isZigzag(pole: PoleNode): boolean {
-  const levels = pole.insulators.filter((i) => i.side !== 'C').map((i) => i.position);
+  const levels = pole.insulators.filter((i) => i.side === 'L' || i.side === 'R').map((i) => i.position);
   return new Set(levels).size === levels.length;
 }
 

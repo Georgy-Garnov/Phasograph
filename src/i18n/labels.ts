@@ -8,7 +8,7 @@ export const nodeKindLabel = (kind: NodeKind): string => t(`node.${kind}` as Mes
 export const lineKindLabel = (kind: LineKind): string => t(`line.${kind}` as MessageKey);
 
 function sideLetters(): Record<Side, string> {
-  return { L: t('side.letter.L'), C: t('side.letter.C'), R: t('side.letter.R') };
+  return { L: t('side.letter.L'), C: t('side.letter.C'), B: t('side.letter.B'), R: t('side.letter.R') };
 }
 
 /** Side letter + position, e.g. "L3"; ABC clamps get a localized "ABC" prefix. */

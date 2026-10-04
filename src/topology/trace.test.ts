@@ -225,6 +225,21 @@ describe('traceScheme', () => {
     expect(isZigzag(p2)).toBe(true);
   });
 
+  it('back insulators: labelled, sorted between center and right, ignored by zigzag', () => {
+    const { s, p2 } = baseScheme();
+    const back = addInsulator(p2, 'B');
+    expect(insulatorLabel(back)).toBe('З6');
+    expect(isZigzag(p2)).toBe(true);
+    const front = addInsulator(p2, 'C');
+    front.position = back.position;
+    expect(sortInsulators(p2.insulators).slice(-2).map((i) => i.side)).toEqual(['C', 'B']);
+    // A jumper to a back insulator carries the phase like any other.
+    p2.jumpers.push({ id: 'jb', a: insulatorWithRole(s, p2, 'B'), b: back.id });
+    expect(traceScheme(s).ports.get(portKey(p2.id, back.id))!.roles).toEqual(['B']);
+    layoutZigzag(p2);
+    expect(back.side).toBe('B');
+  });
+
   describe('luminaires', () => {
     const roleOf = (s: Scheme, pole: PoleNode) => (id: string) => traceScheme(s).ports.get(portKey(pole.id, id))?.roles[0] ?? null;
 
