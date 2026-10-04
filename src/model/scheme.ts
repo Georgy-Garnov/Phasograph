@@ -50,7 +50,7 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
   const base = { id: uid(kind), coords, name: '', note: '' };
   switch (kind) {
     case 'ktp':
-      return { ...base, kind, powerKva: '', feeders: [makeFeeder(1)] };
+      return { ...base, kind, powerKva: '', busVoltage: '', feeders: [makeFeeder(1)] };
     case 'pole04':
     case 'pole10':
     case 'poleService':
@@ -77,6 +77,8 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
         meterNumber: '',
         phaseMode: '1',
         manualPhase: null,
+        designPowerKw: '',
+        currentPowerKw: '',
       };
   }
 }
@@ -317,7 +319,17 @@ export function createLine(
   if (scheme.nodes[toId]?.kind === 'ktp' && scheme.nodes[fromId]?.kind !== 'ktp') [fromId, toId] = [toId, fromId];
   const from = scheme.nodes[fromId];
   const to = scheme.nodes[toId];
-  const line: SchemeLine = { id: uid('ln'), kind, from: fromId, to: toId, suspension, wires: [], mark: '', note: '' };
+  const line: SchemeLine = {
+    id: uid('ln'),
+    kind,
+    from: fromId,
+    to: toId,
+    suspension,
+    wires: [],
+    mark: '',
+    conductor: null,
+    note: '',
+  };
   scheme.lines[line.id] = line;
   if (!isWired(kind) || !from || !to) return line;
 

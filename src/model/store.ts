@@ -3,6 +3,7 @@ import { produce, type Draft } from 'immer';
 import type { LineKind, MapView, NodeKind, Scheme, Suspension, LngLat } from './types';
 import { emptyScheme } from './scheme';
 import { traceScheme, type TraceResult } from '../topology/trace';
+import type { LoadMode } from '../topology/voltage';
 import {
   DEFAULT_VIEW,
   addPhoto,
@@ -37,6 +38,10 @@ export interface Settings {
   baseLayer: BaseLayer;
   geocoder: GeocoderProvider;
   lang: Lang;
+  /** Show the mini voltmeters next to houses. */
+  showVoltage: boolean;
+  /** Loads used in the voltage-drop calculation. */
+  voltageMode: LoadMode;
 }
 
 const SETTINGS_KEY = 'electro-settings-v1';
@@ -51,7 +56,14 @@ function defaultLang(): Lang {
 }
 
 function loadSettings(): Settings {
-  const defaults: Settings = { mapProvider: 'leaflet', baseLayer: 'osm', geocoder: 'nominatim', lang: defaultLang() };
+  const defaults: Settings = {
+    mapProvider: 'leaflet',
+    baseLayer: 'osm',
+    geocoder: 'nominatim',
+    lang: defaultLang(),
+    showVoltage: true,
+    voltageMode: 'current',
+  };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') };
   } catch {

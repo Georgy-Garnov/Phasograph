@@ -6,6 +6,7 @@ import { RoleChip, nodeName } from './common';
 import { lampStatusLabel } from './LampsSection';
 import { currentLocale, useT, type MessageKey } from '../i18n';
 import { formatIssue } from '../i18n/labels';
+import { COS_PHI, VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type LoadMode } from '../topology/voltage';
 import { isPole } from '../model/scheme';
 import { statusLabel } from './HouseForm';
 
@@ -25,7 +26,7 @@ function select(id: string) {
 
 export function ReportPanel() {
   const t = useT();
-  const [tab, setTab] = useState<'houses' | 'issues' | 'feeders' | 'lighting'>('houses');
+  const [tab, setTab] = useState<'houses' | 'issues' | 'feeders' | 'lighting' | 'voltage'>('houses');
   const scheme = useStore((s) => s.scheme);
   const trace = useStore((s) => s.trace);
   const houses = Object.values(scheme.nodes).filter((n): n is HouseNode => n.kind === 'house');
@@ -45,6 +46,9 @@ export function ReportPanel() {
         </button>
         <button className={tab === 'lighting' ? 'on' : ''} onClick={() => setTab('lighting')}>
           {t('report.lighting')}
+        </button>
+        <button className={tab === 'voltage' ? 'on' : ''} onClick={() => setTab('voltage')}>
+          {t('report.voltage')}
         </button>
       </div>
 
@@ -94,6 +98,7 @@ export function ReportPanel() {
       )}
 
       {tab === 'lighting' && <LightingReport />}
+      {tab === 'voltage' && <VoltageReport />}
 
       {tab === 'feeders' && (
         <table className="table">
@@ -209,5 +214,83 @@ function LightingReport() {
         </tbody>
       </table>
     </>
+  );
+}
+
+/** Voltage-drop report: load mode, voltmeters on the map, houses sorted from the lowest voltage. */
+function VoltageReport() {
+  const t = useT();
+  const scheme = useStore((s) => s.scheme);
+  const trace = useStore((s) => s.trace);
+  const settings = useStore((s) => s.settings);
+  const voltages = cachedVoltages(scheme, trace, settings.voltageMode);
+  const houses = Object.values(scheme.nodes).filter((n): n is HouseNode => n.kind === 'house');
+  const rows = houses
+    .filter((h) => voltages.has(h.id))
+    .map((h) => ({ h, v: voltages.get(h.id)! }))
+    .sort((a, b) => a.v.voltage - b.v.voltage);
+  const bad = rows.filter((r) => !r.v.ok).length;
+  const totalKw = rows.reduce((sum, r) => sum + r.v.loadKw, 0);
+
+  return (
+    <div className="pad voltage-report">
+      <div className="row">
+        <div className="seg">
+          {(['current', 'design'] as LoadMode[]).map((m) => (
+            <button key={m} className={settings.voltageMode === m ? 'on' : ''} onClick={() => store.setSettings({ voltageMode: m })}>
+              {t(m === 'current' ? 'voltage.modeCurrent' : 'voltage.modeDesign')}
+            </button>
+          ))}
+        </div>
+        <label className="checks">
+          <input
+            type="checkbox"
+            checked={settings.showVoltage}
+            onChange={(e) => store.setSettings({ showVoltage: e.target.checked })}
+          />
+          {t('voltage.showOnMap')}
+        </label>
+      </div>
+      <p className="muted small">{t('voltage.help', { cos: COS_PHI, min: VOLTAGE_MIN, max: VOLTAGE_MAX })}</p>
+      <div className="stats">
+        <span>
+          {t('voltage.computed')}: <b>{rows.length}</b> / {houses.length}
+        </span>
+        <span>
+          {t('voltage.totalLoad')}: <b>{totalKw.toLocaleString(currentLocale(), { maximumFractionDigits: 1 })} {t('unit.kw')}</b>
+        </span>
+        {rows.length > 0 && (
+          <span>
+            {t('voltage.min')}: <b className={rows[0].v.ok ? '' : 'status-conflict'}>{rows[0].v.voltage.toFixed(1)} {t('unit.v')}</b>
+          </span>
+        )}
+        {bad > 0 && <span className="status status-conflict">{t('voltage.outOfRange', { n: bad })}</span>}
+      </div>
+      {rows.length < houses.length && <p className="muted small">{t('voltage.notComputed', { n: houses.length - rows.length })}</p>}
+      <table className="table clickable">
+        <thead>
+          <tr>
+            <th>{t('col.address')}</th>
+            <th>{t('col.phase')}</th>
+            <th>{t('unit.kw')}</th>
+            <th>{t('unit.v')}</th>
+            <th>ΔU</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ h, v }) => (
+            <tr key={h.id} className={v.ok ? '' : 'bad-row'} onClick={() => select(h.id)}>
+              <td>{nodeName(h)}</td>
+              <td>{v.phases.map((p) => p.phase).join('')}</td>
+              <td>{v.loadKw.toLocaleString(currentLocale(), { maximumFractionDigits: 1 })}</td>
+              <td>
+                <b>{v.voltage.toFixed(1)}</b>
+              </td>
+              <td>{v.dropPct.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

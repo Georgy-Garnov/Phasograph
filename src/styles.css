@@ -468,3 +468,31 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
   border-radius: 1px;
   pointer-events: none;
 }
+
+/* ---- Mini digital voltmeter under a house ---- */
+.node .voltmeter {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 3px;
+  padding: 0 3px;
+  min-width: 24px;
+  font: 700 10px/13px 'Courier New', ui-monospace, monospace;
+  letter-spacing: 0.5px;
+  text-align: center;
+  color: #39ff6a;
+  background: #101418;
+  border: 1.5px solid #c9ced4;
+  outline: 1px solid #2b3036;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.node .voltmeter.bad { color: #ff4d4d; }
+.voltage-report .row { justify-content: space-between; flex-wrap: wrap; }
+.table tr.bad-row td { color: #c62828; }
+/* Report tabs: keep on one line and scroll horizontally when they do not fit. */
+.report .tabs { overflow-x: auto; scrollbar-width: thin; }
+.report .tabs button { flex: none; white-space: nowrap; padding: 8px 10px; }

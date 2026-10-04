@@ -10,6 +10,7 @@
  */
 import type { LineKind, LngLat, MapView, NodeKind, Role, Scheme, SchemeLine, SchemeNode } from './types';
 import { centroid, createNode, distanceMeters, emptyScheme, normalizeAngle } from './scheme';
+import { CONDUCTORS } from './conductors';
 import type { TraceResult } from '../topology/trace';
 import { wireKey } from '../topology/trace';
 
@@ -186,6 +187,7 @@ export function importGeoJSON(input: unknown): ImportResult {
         toPort: w.toPort == null ? null : str(w.toPort),
       })),
       mark: str(p.mark),
+      conductor: typeof p.conductor === 'string' && CONDUCTORS[p.conductor] ? p.conductor : null,
       note: str(p.note),
     };
     scheme.lines[id] = line;
@@ -212,6 +214,7 @@ function sanitizeNode(node: SchemeNode): void {
   node.note = str(node.note);
   switch (node.kind) {
     case 'ktp':
+      node.busVoltage = str(node.busVoltage);
       node.feeders = arr<Json>(node.feeders).map((f, fi) => ({
         id: str(f.id, `f${fi + 1}`),
         name: str(f.name, `Фидер ${fi + 1}`),
@@ -259,6 +262,8 @@ function sanitizeNode(node: SchemeNode): void {
       node.phaseMode = node.phaseMode === '3' ? '3' : '1';
       node.manualPhase = (['A', 'B', 'C'] as const).find((p) => p === node.manualPhase) ?? null;
       node.addressSource = node.addressSource === 'geocoder' || node.addressSource === 'manual' ? node.addressSource : null;
+      node.designPowerKw = str(node.designPowerKw);
+      node.currentPowerKw = str(node.currentPowerKw);
       break;
   }
 }

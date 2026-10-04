@@ -94,6 +94,18 @@ with attribution; for many users you need your own tile server or a commercial p
 
 Shortcuts: `Esc` — finish a line / cancel the tool, `Del` — delete, `Ctrl+Z` / `Ctrl+Shift+Z`, `Enter` — finish an outline.
 
+## Voltage-drop calculator
+
+Houses have a **design connection power** and a **current consumption** (kW); spans and drops have a
+**conductor** from a catalog (bare aluminium A-16…A-95, ACSR, copper, ABC SIP-2 / SIP-4 with r, x per km;
+defaults: A-35 for bare main lines, SIP-2 3×50+1×54.6 for ABC, SIP-4 2×16 for drops); substations have a
+busbar phase voltage (230 V by default). For every feeder the app builds the path from the substation to each
+house over the traced spans, sums the loads per phase and computes the neutral current as the phasor sum of the
+phase currents, so unbalanced phasing shows up as a neutral shift. A **mini digital voltmeter** next to every house
+shows the phase voltage at its entry (green within 207–253 V, ±10% by GOST 32144, red otherwise; the lowest phase
+for three-phase houses). The "Voltage" report tab switches between current and design loads, toggles the
+voltmeters and lists houses from the lowest voltage. cos φ = 0.95; resistances are typical values at 20 °C.
+
 ## Data model
 
 `src/model/types.ts`. Nodes (Point): `ktp`, `pole10`, `pole04`, `poleService`, `entry`, `house` (optional outline).

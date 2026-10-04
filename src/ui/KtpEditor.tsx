@@ -30,6 +30,14 @@ export function KtpEditor({ ktp }: { ktp: KtpNode }) {
               onChange={(e) => editNode(ktp.id, 'ktp', (k) => void (k.powerKva = e.target.value), 'power')}
             />
           </Field>
+          <Field label={t('ktp.busVoltage')}>
+            <input
+              inputMode="decimal"
+              value={ktp.busVoltage}
+              placeholder="230"
+              onChange={(e) => editNode(ktp.id, 'ktp', (k) => void (k.busVoltage = e.target.value), 'busVoltage')}
+            />
+          </Field>
         </div>
       </Section>
 

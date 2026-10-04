@@ -3,7 +3,8 @@ import { store, useStore } from '../model/store';
 import type { PoleNode, SchemeLine, SchemeNode, Suspension } from '../model/types';
 import { addWire, assignFeeder, houseOf, isPole, isWired, mapWiresByPosition } from '../model/scheme';
 import { formatLength, lineKindLabel, portOptions } from '../i18n/labels';
-import { t as tr, useT } from '../i18n';
+import { t as tr, useT, type MessageKey } from '../i18n';
+import { CONDUCTORS, CONDUCTOR_GROUPS, conductorsOf, defaultConductorId } from '../model/conductors';
 import { portKey, wireKey } from '../topology/trace';
 import { PoleDiagram } from './PoleDiagram';
 import { HouseForm } from './HouseForm';
@@ -135,6 +136,26 @@ export function LineEditor({ line }: { line: SchemeLine }) {
               onChange={(e) => editLine(line.id, (l) => void (l.mark = e.target.value), 'mark')}
             />
           </Field>
+          {(line.kind === 'line04' || isDrop) && (
+            <Field label={t('line.conductor')}>
+              <select
+                value={line.conductor ?? ''}
+                title={t('line.conductorTitle')}
+                onChange={(e) => editLine(line.id, (l) => void (l.conductor = e.target.value || null))}
+              >
+                <option value="">{t('line.conductorDefault', { name: CONDUCTORS[defaultConductorId(line)].label })}</option>
+                {CONDUCTOR_GROUPS.map((g) => (
+                  <optgroup key={g} label={t(`conductor.group.${g}` as MessageKey)}>
+                    {conductorsOf(g).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label} · {c.r} {t('unit.ohmPerKm')}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
       </Section>
 

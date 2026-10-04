@@ -6,6 +6,7 @@ import { refreshAddress } from '../map/interactions';
 import type { HouseStatus, HouseTrace } from '../topology/trace';
 import { Field, KtpDistanceInfo, NodeLink, RoleChip, Section, editNode, editScheme } from './common';
 import { lineLength } from '../topology/distances';
+import { cachedVoltages } from '../topology/voltage';
 import { formatLength, nodeName } from '../i18n/labels';
 import { t as tr, useT, type MessageKey } from '../i18n';
 
@@ -83,6 +84,22 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
             onChange={(e) => editNode(house.id, 'house', (h) => void (h.meterNumber = e.target.value), 'meter')}
           />
         </Field>
+        <Field label={tr('house.designPower')}>
+          <input
+            inputMode="decimal"
+            value={house.designPowerKw}
+            placeholder="15"
+            onChange={(e) => editNode(house.id, 'house', (h) => void (h.designPowerKw = e.target.value), 'designPower')}
+          />
+        </Field>
+        <Field label={tr('house.currentPower')}>
+          <input
+            inputMode="decimal"
+            value={house.currentPowerKw}
+            placeholder="2.5"
+            onChange={(e) => editNode(house.id, 'house', (h) => void (h.currentPowerKw = e.target.value), 'currentPower')}
+          />
+        </Field>
       </div>
 
       {house.phaseMode === '1' ? (
@@ -133,6 +150,7 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
         )}
       </div>
 
+      <HouseVoltageInfo houseId={house.id} />
       <div className="stats">
         <KtpDistanceInfo nodeId={house.id} />
         {drops.length > 0 && (
@@ -200,5 +218,27 @@ export function EntryEditor({ entryId }: { entryId: string }) {
       </Section>
       {house?.kind === 'house' && <HouseForm house={house} compact />}
     </>
+  );
+}
+
+/** Supply voltage at the house entry from the voltage-drop calculation. */
+function HouseVoltageInfo({ houseId }: { houseId: string }) {
+  const tr = useT();
+  const scheme = useStore((s) => s.scheme);
+  const trace = useStore((s) => s.trace);
+  const mode = useStore((s) => s.settings.voltageMode);
+  const v = cachedVoltages(scheme, trace, mode).get(houseId);
+  if (!v) return null;
+  return (
+    <div className="stats">
+      <span>
+        {tr(mode === 'design' ? 'voltage.atEntryDesign' : 'voltage.atEntry')}:{' '}
+        <b className={v.ok ? 'status-ok' : 'status-conflict'}>
+          {v.phases.map((p) => `${v.phases.length > 1 ? `${p.phase} ` : ''}${p.voltage.toFixed(1)}`).join(' · ')} {tr('unit.v')}
+        </b>{' '}
+        ({v.dropPct >= 0 ? '−' : '+'}
+        {Math.abs(v.dropPct).toFixed(1)}%)
+      </span>
+    </div>
   );
 }

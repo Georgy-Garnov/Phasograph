@@ -39,6 +39,8 @@ export interface Feeder {
 export interface KtpNode extends NodeBase {
   kind: 'ktp';
   powerKva: string;
+  /** Phase-to-neutral voltage on the 0.4 kV busbars, V (string as typed; empty = 230). */
+  busVoltage: string;
   feeders: Feeder[];
 }
 
@@ -116,6 +118,10 @@ export interface HouseNode extends NodeBase {
   phaseMode: PhaseMode;
   /** Manually specified phase (for ABC or when tracing is unavailable). */
   manualPhase: Phase | null;
+  /** Permitted/design connection power, kW (string as typed). */
+  designPowerKw: string;
+  /** Current consumption, kW (string as typed). */
+  currentPowerKw: string;
 }
 
 export type SchemeNode = KtpNode | PoleNode | EntryNode | HouseNode;
@@ -141,6 +147,8 @@ export interface SchemeLine {
   wires: Wire[];
   /** Wire type/cross-section, e.g. "A-35" or "SIP-2 3x50+1x54.6". */
   mark: string;
+  /** Conductor from the catalog used for voltage-drop calculation; null — default for the line type. */
+  conductor: string | null;
   note: string;
 }
 

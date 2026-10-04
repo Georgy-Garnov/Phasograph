@@ -130,7 +130,9 @@ export function MapView() {
           s.contour !== prev.contour ||
           s.photos !== prev.photos ||
           s.rotatePreview !== prev.rotatePreview ||
-          s.settings.lang !== prev.settings.lang;
+          s.settings.lang !== prev.settings.lang ||
+          s.settings.showVoltage !== prev.settings.showVoltage ||
+          s.settings.voltageMode !== prev.settings.voltageMode;
         prev = s;
         if (changed) draw();
       });

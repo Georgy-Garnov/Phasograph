@@ -8,6 +8,7 @@ import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS 
 import { bearing, destination, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
+import { cachedVoltages, type HouseVoltage } from '../topology/voltage';
 import { t } from '../i18n';
 
 /** Below this zoom parallel wires are drawn closer together. */
@@ -133,8 +134,15 @@ export function buildPreview(state: AppState, cursor: LngLat | null): Map<string
   return specs;
 }
 
+/** Mini digital voltmeter under a house: three digits in a frame, red when out of the ±10% range. */
+function voltmeter(v: HouseVoltage): string {
+  const title = v.phases.map((p) => `${p.phase}: ${p.voltage.toFixed(1)} ${t('unit.v')}`).join(', ');
+  return `<span class="voltmeter${v.ok ? '' : ' bad'}" title="${escapeHtml(title)}">${Math.round(v.voltage)}</span>`;
+}
+
 function buildMarkers(state: AppState): MarkerSpec[] {
   const { scheme, selection, lineStart, tool, trace } = state;
+  const voltages = state.settings?.showVoltage ? cachedVoltages(scheme, trace, state.settings.voltageMode) : null;
   const photoCounts = new Map<string, number>();
   for (const p of state.photos ?? []) photoCounts.set(p.nodeId, (photoCounts.get(p.nodeId) ?? 0) + 1);
   return Object.values(scheme.nodes).map((node) => {
@@ -142,6 +150,7 @@ function buildMarkers(state: AppState): MarkerSpec[] {
     if (selection?.type === 'node' && selection.id === node.id) classes.push('selected');
     if (lineStart === node.id) classes.push('line-start');
     let badge = '';
+    let voltmeterHtml = '';
     if (node.kind === 'house') {
       const h = trace.houses.get(node.id);
       const phases = h?.effectivePhases ?? [];
@@ -152,6 +161,8 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       } else badge = '?';
       if (h?.status === 'conflict') classes.push('conflict');
       if (h && h.status !== 'ok' && h.computedPhases.length === 0) classes.push('manual');
+      const v = voltages?.get(node.id);
+      if (v) voltmeterHtml = voltmeter(v);
     }
     if (isPole(node) && node.number) badge = node.number;
     let lampHtml = '';
@@ -170,7 +181,7 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       id: node.id,
       coords: node.coords,
       className: classes.join(' '),
-      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}`,
+      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}${voltmeterHtml}`,
       title: node.kind === 'house' ? node.address || node.name : node.name,
       draggable: tool.type === 'select',
       zIndex: node.kind === 'house' ? 10 : 20,
