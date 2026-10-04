@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1f2a36"/>
+  <!-- опора -->
+  <rect x="244" y="96" width="24" height="340" rx="8" fill="#8d7b68"/>
+  <rect x="128" y="150" width="256" height="14" rx="6" fill="#6b6b6b"/>
+  <!-- провода-фазы, уходящие вправо -->
+  <path d="M150 140 C 260 210, 360 210, 470 170" stroke="#f2c200" stroke-width="16" fill="none" stroke-linecap="round"/>
+  <path d="M150 140 C 260 260, 360 260, 470 240" stroke="#1f9d3a" stroke-width="16" fill="none" stroke-linecap="round" opacity=".95"/>
+  <path d="M150 140 C 260 310, 360 310, 470 310" stroke="#d62828" stroke-width="16" fill="none" stroke-linecap="round" opacity=".95"/>
+  <circle cx="150" cy="140" r="26" fill="#1e5bd8"/>
+  <!-- молния -->
+  <path d="M120 300 L 176 300 L 150 360 L 196 360 L 118 456 L 140 386 L 100 386 Z" fill="#ff9800"/>
+</svg>

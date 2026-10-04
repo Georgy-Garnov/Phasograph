@@ -1,0 +1,167 @@
+import { useEffect, useRef, useState } from 'react';
+import { store, useStore } from '../model/store';
+import type { LngLat } from '../model/types';
+import type { MapAdapter, MapEvents } from './adapter';
+import { LeafletAdapter } from './leafletAdapter';
+import { YandexAdapter } from './yandexAdapter';
+import { clearApiKey, getApiKey, loadYmaps, saveApiKey } from './loader';
+import { useT } from '../i18n';
+import { buildPreview, buildScene } from './scene';
+import {
+  finishContour,
+  focusedWires,
+  handleFeatureClick,
+  handleMapClick,
+  handleNodeClick,
+  moveNode,
+} from './interactions';
+
+/** Map access from other parts of the UI (flying to an object, etc.). */
+export const mapApi: { flyTo?: (c: LngLat, zoom?: number) => void } = {};
+
+function YandexKeyForm({ onKey }: { onKey: (k: string) => void }) {
+  const t = useT();
+  const [value, setValue] = useState('');
+  return (
+    <form
+      className="map-error"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!value.trim()) return;
+        saveApiKey(value.trim());
+        onKey(value.trim());
+      }}
+    >
+      <p>
+        {t('yandex.keyNeeded')} (
+        <a href="https://developer.tech.yandex.ru/" target="_blank" rel="noreferrer">
+          {t('yandex.cabinet')}
+        </a>
+        ).
+      </p>
+      <div className="row">
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={t('yandex.keyPlaceholder')} autoFocus />
+        <button type="submit">{t('yandex.open')}</button>
+      </div>
+      <button type="button" className="link" onClick={() => store.setSettings({ mapProvider: 'leaflet' })}>
+        {t('yandex.backToOsm')}
+      </button>
+    </form>
+  );
+}
+
+export function MapView() {
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const adapterRef = useRef<MapAdapter | null>(null);
+  const provider = useStore((s) => s.settings.mapProvider);
+  const baseLayer = useStore((s) => s.settings.baseLayer);
+  const [apiKey, setApiKey] = useState(getApiKey());
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+    if (provider === 'yandex' && !apiKey) return;
+    let adapter: MapAdapter | null = null;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    let cursor: LngLat | null = null;
+    let renderedZoom = -1;
+
+    const draw = () => {
+      if (!adapter) return;
+      const s = store.get();
+      renderedZoom = adapter.zoom;
+      adapter.setDrawing(s.tool.type !== 'select');
+      adapter.apply(buildScene(s, focusedWires(), adapter.zoom));
+      adapter.applyPreview(buildPreview(s, cursor));
+    };
+
+    const events: MapEvents = {
+      mapClick: handleMapClick,
+      mapDblClick: () => {
+        if (store.get().tool.type === 'houseContour') finishContour();
+      },
+      mouseMove: (c) => {
+        cursor = c;
+        const s = store.get();
+        if (s.lineStart || s.contour.length) adapter?.applyPreview(buildPreview(s, cursor));
+      },
+      // The spacing between parallel wires is in pixels, so recompute it on zoom change.
+      zoomChange: (z) => {
+        if (Math.abs(z - renderedZoom) > 0.3) draw();
+      },
+      viewChange: (view) => store.set({ view }),
+      markerClick: handleNodeClick,
+      markerDragEnd: moveNode,
+      featureClick: handleFeatureClick,
+    };
+
+    const start = async () => {
+      if (provider === 'yandex') await loadYmaps(apiKey);
+      if (cancelled || !ref.current) return;
+      const { view, settings } = store.get();
+      adapter =
+        provider === 'yandex'
+          ? new YandexAdapter(ref.current, view, events)
+          : new LeafletAdapter(ref.current, view, settings.baseLayer, events);
+      adapterRef.current = adapter;
+      mapApi.flyTo = (c, z) => adapter?.flyTo(c, z);
+      draw();
+      let prev = store.get();
+      unsubscribe = store.subscribe(() => {
+        const s = store.get();
+        const changed =
+          s.scheme !== prev.scheme ||
+          s.selection !== prev.selection ||
+          s.focusKey !== prev.focusKey ||
+          s.tool !== prev.tool ||
+          s.lineStart !== prev.lineStart ||
+          s.contour !== prev.contour ||
+          s.photos !== prev.photos ||
+          s.settings.lang !== prev.settings.lang;
+        prev = s;
+        if (changed) draw();
+      });
+    };
+    start().catch((e: Error) => setError(e.message));
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+      adapter?.destroy();
+      adapterRef.current = null;
+      mapApi.flyTo = undefined;
+    };
+  }, [provider, apiKey]);
+
+  useEffect(() => {
+    const a = adapterRef.current;
+    if (a instanceof LeafletAdapter) a.setBaseLayer(baseLayer);
+  }, [baseLayer]);
+
+  return (
+    <div className="map-wrap">
+      {/* key: the container is recreated when the provider changes, since map libraries dislike foreign DOM. */}
+      <div ref={ref} key={`${provider}:${apiKey}`} className="map" />
+      {provider === 'yandex' && !apiKey && <YandexKeyForm onKey={setApiKey} />}
+      {error && (
+        <div className="map-error">
+          <p>{error === 'ymaps-load-failed' ? t('yandex.loadFailed') : error}</p>
+          <p className="muted small">{t('yandex.checkKey')}</p>
+          <div className="row">
+            <button
+              onClick={() => {
+                clearApiKey();
+                location.reload();
+              }}
+            >
+              {t('yandex.otherKey')}
+            </button>
+            <button onClick={() => store.setSettings({ mapProvider: 'leaflet' })}>{t('yandex.openOsm')}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,40 @@
+{
+  "name": "phasograph-cad",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Phasograph CAD — mapping and phase tracing of 0.4/10 kV distribution grids on an online map",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "Georgiy Garnov (https://github.com/Georgy-Garnov)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Georgy-Garnov/Phasograph.git"
+  },
+  "homepage": "https://georgy-garnov.github.io/Phasograph/",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "immer": "^11.1.21",
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@yandex/ymaps3-types": "^1.0.21414904",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "^2.1.9"
+  }
+}
