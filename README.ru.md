@@ -1,6 +1,6 @@
 # Фазограф КАД (Phasograph CAD) — оцифровка уличных электросетей 0.4 / 10 кВ
 
-[English](README.md) · **Русский** · Онлайн: https://georgy-garnov.github.io/Phasograph/
+[English](README.md) · **Русский** · [Հայերեն](README.hy.md) · Онлайн: https://georgy-garnov.github.io/Phasograph/
 
 **Фазограф КАД** (англ. **Phasograph CAD**, арм. **Ֆազոգրաֆ CAD**; название меняется вместе с языком интерфейса) — веб-приложение для картографирования распределительных сетей прямо на онлайн-карте
 (OpenStreetMap через Leaflet или Яндекс Карты JS API v3 — переключается в шапке):

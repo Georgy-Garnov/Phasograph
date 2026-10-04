@@ -1,6 +1,6 @@
 # Phasograph CAD (Фазограф КАД) — mapping 0.4 / 10 kV street power grids
 
-**English** · [Русский](README.ru.md) · Live: https://georgy-garnov.github.io/Phasograph/
+**English** · [Русский](README.ru.md) · [Հայերեն](README.hy.md) · Live: https://georgy-garnov.github.io/Phasograph/
 
 **Phasograph CAD** (Russian: **Фазограф КАД**, Armenian: **Ֆազոգրաֆ CAD**; the name follows the interface language) is a web app for mapping
 distribution grids directly on an online map (OpenStreetMap via Leaflet or Yandex Maps JS API v3, switchable in
