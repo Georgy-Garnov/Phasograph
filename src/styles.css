@@ -33,7 +33,10 @@ code { background: #e9edf1; padding: 0 4px; border-radius: 3px; }
 
 .app {
   display: grid;
-  grid-template-columns: 210px 1fr 440px;
+  /* The sidebar width is a CSS variable: user-resized width is set inline on .app and wins over the defaults. */
+  grid-template-columns: var(--tools-w) 1fr var(--sidebar-w);
+  --tools-w: 210px;
+  --sidebar-w: 440px;
   grid-template-rows: 44px 1fr;
   grid-template-areas: 'top top top' 'tools center side';
   height: 100%;
@@ -348,12 +351,12 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 .providers { flex-wrap: wrap; }
 
 @media (max-width: 1280px) {
-  .app { grid-template-columns: 180px 1fr 380px; }
+  .app { --tools-w: 180px; --sidebar-w: 380px; }
   .tool { font-size: 12px; }
 }
 @media (max-width: 1024px) {
   /* Narrow screen (iPad portrait): tools show icons only, labels go to the tooltip. */
-  .app { grid-template-columns: 52px 1fr 340px; }
+  .app { --tools-w: 52px; --sidebar-w: 340px; }
   .toolbar { padding: 6px 4px; }
   .tool { justify-content: center; padding: 6px 0; }
   .tool span:last-child, .tool-group-title { display: none; }
@@ -368,3 +371,40 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 /* Longer translations (e.g. Armenian): let section header buttons wrap instead of overflowing. */
 .section > header { flex-wrap: wrap; row-gap: 4px; }
 .btn-row { flex-wrap: wrap; }
+
+/* Insulator table: compact controls, connections on a second line, horizontal scroll as a last resort. */
+.table-scroll { overflow-x: auto; }
+.ins-table select, .ins-table input { font-size: 12px; padding: 2px 3px; }
+.ins-table td { padding: 2px 3px; }
+.ins-table td select { max-width: 100px; }
+.ins-table .ins-label { font-weight: 600; white-space: nowrap; }
+.ins-table tr.ins-row td { border-bottom: none; padding-top: 4px; }
+.ins-table tr.ins-conn td { padding-top: 0; padding-bottom: 4px; }
+
+/* Drag handle on the left edge of the sidebar. */
+.sidebar { position: relative; }
+.sidebar-resizer {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.sidebar-resizer:hover::after, .sidebar-resizer.dragging::after { background: #1f6feb; }
+.ins-table td { padding: 2px 2px; }
+.ins-table td select { max-width: 84px; text-overflow: ellipsis; }
+.ins-table input.num { width: 38px; }
+.ins-table button.icon { padding: 0 4px; }

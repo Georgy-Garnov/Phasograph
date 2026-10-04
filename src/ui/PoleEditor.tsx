@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { store, useStore } from '../model/store';
 import type { PoleKind, PoleNode, Side } from '../model/types';
 import {
@@ -178,21 +178,24 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
           </div>
         )}
         <p className="muted">{t('pole.help')}</p>
-        <table className="table">
+        <div className="table-scroll">
+        <table className="table ins-table">
           <thead>
             <tr>
+              <th />
               <th>{t('pole.col.ins')}</th>
               <th>{t('pole.col.side')}</th>
-              <th>{t('pole.col.pos')}</th>
+              <th title={t('pole.col.pos')}>№</th>
               <th title={t('pole.col.markTitle')}>{t('pole.col.mark')}</th>
-              <th>{t('pole.col.phase')}</th>
-              <th>{t('pole.col.conn')}</th>
+              <th title={t('pole.col.phase')} />
               <th />
             </tr>
           </thead>
           <tbody>
             {sorted.map((ins) => (
-              <tr key={ins.id} className={selectedIns === ins.id ? 'active' : ''} onClick={() => focus(ins.id)}>
+              <Fragment key={ins.id}>
+              <tr className={selectedIns === ins.id ? 'ins-row active' : 'ins-row'} onClick={() => focus(ins.id)}>
+                <td className="ins-label">{insLabel(ins)}</td>
                 <td>
                   <select
                     value={ins.type}
@@ -253,7 +256,6 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                 <td>
                   <TraceChip trace={trace.ports.get(portKey(pole.id, ins.id))} />
                 </td>
-                <td className="small">{connections(ins.id).join('; ') || <span className="muted">{t('pole.free')}</span>}</td>
                 <td>
                   <button
                     className="icon danger"
@@ -270,9 +272,18 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                   </button>
                 </td>
               </tr>
+              {/* Connections go on a second, full-width line so the table fits the sidebar. */}
+              <tr className={selectedIns === ins.id ? 'ins-conn active' : 'ins-conn'} onClick={() => focus(ins.id)}>
+                <td />
+                <td colSpan={6} className="small muted">
+                  {connections(ins.id).join('; ') || t('pole.free')}
+                </td>
+              </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
+        </div>
       </Section>
 
       <LampsSection pole={pole} />

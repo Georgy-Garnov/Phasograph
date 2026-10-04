@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { store, useStore } from './model/store';
 import { emptyScheme } from './model/scheme';
 import { MapView, mapApi } from './map/MapView';
@@ -64,8 +64,48 @@ function ExportMenu() {
   );
 }
 
+const SIDEBAR_KEY = 'electro-sidebar-width';
+const SIDEBAR_MIN = 280;
+
+function loadSidebarWidth(): number | null {
+  const v = Number(localStorage.getItem(SIDEBAR_KEY));
+  return v >= SIDEBAR_MIN ? v : null;
+}
+
+/** Drag handle on the sidebar's left edge (mouse and touch). Double-click resets to the default width. */
+function SidebarResizer({ onResize }: { onResize: (width: number | null) => void }) {
+  const t = useT();
+  const [dragging, setDragging] = useState(false);
+  const clamp = (w: number) => Math.round(Math.min(Math.max(w, SIDEBAR_MIN), Math.max(SIDEBAR_MIN, window.innerWidth - 420)));
+  return (
+    <div
+      className={dragging ? 'sidebar-resizer dragging' : 'sidebar-resizer'}
+      title={t('sidebar.resizeTitle')}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        if (dragging) onResize(clamp(window.innerWidth - e.clientX));
+      }}
+      onPointerUp={(e) => {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        setDragging(false);
+      }}
+      onDoubleClick={() => onResize(null)}
+    />
+  );
+}
+
 function Editor() {
   const t = useT();
+  const [sidebarWidth, setSidebarWidthState] = useState<number | null>(loadSidebarWidth);
+  const setSidebarWidth = (w: number | null) => {
+    setSidebarWidthState(w);
+    if (w === null) localStorage.removeItem(SIDEBAR_KEY);
+    else localStorage.setItem(SIDEBAR_KEY, String(w));
+  };
   const canUndo = useStore((s) => s.canUndo);
   const canRedo = useStore((s) => s.canRedo);
   const hint = useStore((s) => s.hint);
@@ -103,7 +143,7 @@ function Editor() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app" style={sidebarWidth ? ({ '--sidebar-w': `${sidebarWidth}px` } as CSSProperties) : undefined}>
       <header className="topbar">
         <button className="projects-btn" onClick={() => void store.closeProject()} title={t('topbar.projectsTitle')}>
           ☰ {t('topbar.projects')}
@@ -143,6 +183,7 @@ function Editor() {
         </div>
       </main>
       <aside className="sidebar">
+        <SidebarResizer onResize={setSidebarWidth} />
         <div className="sidebar-top">
           <Inspector />
         </div>

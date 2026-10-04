@@ -45,10 +45,14 @@ interface FeatureHandle {
 export class LeafletAdapter extends DiffingAdapter<MarkerHandle, FeatureHandle> {
   private map: L.Map;
   private base: L.TileLayer;
+  private resizeObserver: ResizeObserver;
 
   constructor(container: HTMLElement, view: MapView, baseLayer: BaseLayer, private events: MapEvents) {
     super();
     this.map = L.map(container, { center: toLatLng(view.center), zoom: Math.round(view.zoom), maxZoom: 21 });
+    // Leaflet does not notice container size changes (e.g. sidebar resize) on its own.
+    this.resizeObserver = new ResizeObserver(() => this.map.invalidateSize({ pan: false }));
+    this.resizeObserver.observe(container);
     this.base = BASE_LAYERS[baseLayer]().addTo(this.map);
     this.map.on('click', (e: L.LeafletMouseEvent) => events.mapClick(toLngLat(e.latlng)));
     this.map.on('dblclick', () => events.mapDblClick());
@@ -76,6 +80,7 @@ export class LeafletAdapter extends DiffingAdapter<MarkerHandle, FeatureHandle> 
   }
 
   destroy() {
+    this.resizeObserver.disconnect();
     this.map.remove();
   }
 
