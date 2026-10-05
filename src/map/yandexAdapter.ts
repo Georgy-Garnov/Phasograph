@@ -11,12 +11,13 @@ const BEHAVIORS = ['drag', 'pinchZoom', 'scrollZoom'] as const;
 /** Scheme customization that hides all geometry and keeps only labels (for the hybrid mode). */
 const LABELS_ONLY = [{ elements: 'geometry', stylers: [{ visibility: 'off' }] }];
 
+/** Our lines and markers: above every base layer. */
+const FEATURES_Z_INDEX = 2200;
 /**
- * Scheme sub-layer order: icons and labels are lifted above the satellite layer (which sits below our features
- * layer at FEATURES_Z_INDEX) so they stay readable in hybrid mode, but still below our lines and markers.
+ * Hybrid: the labels-only scheme gets its icons/labels well above the satellite layer and still below our
+ * features. In plain scheme mode the default sub-layer order is used.
  */
-const FEATURES_Z_INDEX = 1800;
-const SCHEME_LAYERS = { icons: { zIndex: FEATURES_Z_INDEX - 20 }, labels: { zIndex: FEATURES_Z_INDEX - 10 } };
+const HYBRID_SCHEME_LAYERS = { icons: { zIndex: FEATURES_Z_INDEX - 20 }, labels: { zIndex: FEATURES_Z_INDEX - 10 } };
 
 function withoutUndefined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -37,25 +38,21 @@ function satelliteLayerClass(): (new (props: { visible: boolean }) => LayerEntit
 export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTMLElement }, YMapFeature> {
   private map: YMap;
   private currentZoom: number;
-  private scheme: LayerEntity;
+  private scheme: LayerEntity | null = null;
   private satellite: LayerEntity | null = null;
+  private satelliteAttached = false;
+  private satelliteClass = satelliteLayerClass();
 
   constructor(container: HTMLElement, view: MapView, baseLayer: BaseLayer, private events: MapEvents) {
     super();
-    const { YMap, YMapDefaultSchemeLayer, YMapDefaultFeaturesLayer, YMapListener } = ymaps3;
+    const { YMap, YMapDefaultFeaturesLayer, YMapListener } = ymaps3;
     this.currentZoom = view.zoom;
     this.map = new YMap(container, {
       location: { center: view.center, zoom: view.zoom },
       behaviors: [...BEHAVIORS, 'dblClick'],
       zoomRange: { min: 3, max: 21 },
     });
-    this.scheme = new YMapDefaultSchemeLayer({ layers: SCHEME_LAYERS }) as unknown as LayerEntity;
-    this.map.addChild(this.scheme);
-    const Satellite = satelliteLayerClass();
-    if (Satellite) {
-      this.satellite = new Satellite({ visible: false });
-      this.map.addChild(this.satellite);
-    }
+    if (this.satelliteClass) this.satellite = new this.satelliteClass({ visible: true });
     this.setBaseLayer(baseLayer);
     // Explicit z-index keeps our lines and markers above the base layers (the satellite layer otherwise covers them).
     this.map.addChild(new YMapDefaultFeaturesLayer({ zIndex: FEATURES_Z_INDEX }));
@@ -92,12 +89,28 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
    */
   setBaseLayer(layer: BaseLayer) {
     const mode = layer !== 'osm' && this.satellite !== null ? layer : 'osm';
-    this.satellite?.update({ visible: mode !== 'osm' });
-    this.scheme.update({
-      visible: mode !== 'satellite',
-      customization: mode === 'hybrid' ? LABELS_ONLY : [],
-      layers: SCHEME_LAYERS,
-    } as never);
+    // The scheme layer is recreated rather than updated: customization/sub-layer order passed to update() were
+    // not reliably applied (labels stayed under the satellite, and "labels only" stuck after leaving hybrid).
+    if (this.scheme) this.map.removeChild(this.scheme);
+    this.scheme = null;
+    if (this.satellite && this.satelliteAttached && mode === 'osm') {
+      this.map.removeChild(this.satellite);
+      this.satelliteAttached = false;
+    }
+    if (this.satellite && !this.satelliteAttached && mode !== 'osm') {
+      this.map.addChild(this.satellite);
+      this.satelliteAttached = true;
+    }
+    if (mode === 'osm') {
+      this.scheme = new ymaps3.YMapDefaultSchemeLayer({}) as unknown as LayerEntity;
+    } else if (mode === 'hybrid') {
+      this.scheme = new ymaps3.YMapDefaultSchemeLayer({
+        customization: LABELS_ONLY,
+        layers: HYBRID_SCHEME_LAYERS,
+      } as never) as unknown as LayerEntity;
+    }
+    // Added after the satellite so that, at equal z-index, the scheme (labels) is drawn on top.
+    if (this.scheme) this.map.addChild(this.scheme);
   }
 
   setDrawing(drawing: boolean) {
