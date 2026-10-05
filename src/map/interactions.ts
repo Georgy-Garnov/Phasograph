@@ -22,6 +22,7 @@ import { lineKindLabel, nodeKindLabel } from '../i18n/labels';
 import { highlightWires, portKey, type TraceResult } from '../topology/trace';
 import { reverseGeocode } from './geocoder';
 import type { FeatureTarget } from './scene';
+import { moveEdge, snapVertex } from '../model/contourEdit';
 
 const LINE_ENDPOINTS: Record<LineKind, { start: NodeKind[]; end: NodeKind[]; autoNode: NodeKind | null }> = {
   line10: { start: ['ktp', 'pole10'], end: ['ktp', 'pole10'], autoNode: 'pole10' },
@@ -401,4 +402,69 @@ export function setPoleAzimuth(poleId: string, azimuth: number | null) {
     },
     { patch: { rotatePreview: null } },
   );
+}
+
+// ---------- House outline editing ----------
+
+/** Magnet reach for outline corners, in screen pixels. */
+export const CONTOUR_SNAP_PX = 10;
+
+export function startContourEdit(houseId: string) {
+  const house = store.get().scheme.nodes[houseId];
+  if (house?.kind !== 'house' || !house.contour) return;
+  store.set({
+    contourEdit: { houseId, points: [...house.contour] },
+    contourPreview: null,
+    selection: { type: 'node', id: houseId },
+    tool: { type: 'select' },
+    lineStart: null,
+    contour: [],
+    hint: t('contour.editHint'),
+  });
+}
+
+export function previewContourVertex(index: number, coords: LngLat, toleranceM: number) {
+  const edit = store.get().contourEdit;
+  if (!edit) return;
+  const snap = snapVertex(edit.points, index, coords, toleranceM);
+  const points = [...edit.points];
+  points[index] = snap.point;
+  store.set({ contourPreview: { points, green: snap.greenEdges } });
+}
+
+export function commitContourVertex(index: number, coords: LngLat, toleranceM: number) {
+  const edit = store.get().contourEdit;
+  if (!edit) return;
+  const points = [...edit.points];
+  points[index] = snapVertex(edit.points, index, coords, toleranceM).point;
+  store.set({ contourEdit: { ...edit, points }, contourPreview: null });
+}
+
+export function previewContourEdge(edge: number, coords: LngLat) {
+  const edit = store.get().contourEdit;
+  if (edit) store.set({ contourPreview: { points: moveEdge(edit.points, edge, coords), green: [] } });
+}
+
+export function commitContourEdge(edge: number, coords: LngLat) {
+  const edit = store.get().contourEdit;
+  if (edit) store.set({ contourEdit: { ...edit, points: moveEdge(edit.points, edge, coords) }, contourPreview: null });
+}
+
+/** Saves the draft outline as one undo step (the house point moves to the new centre). */
+export function finishContourEdit() {
+  const edit = store.get().contourEdit;
+  if (!edit) return;
+  store.edit(
+    (d) => {
+      const h = d.nodes[edit.houseId];
+      if (h?.kind !== 'house') return;
+      h.contour = edit.points;
+      h.coords = centroid(edit.points);
+    },
+    { patch: { contourEdit: null, contourPreview: null, hint: t('contour.saved') } },
+  );
+}
+
+export function cancelContourEdit() {
+  store.set({ contourEdit: null, contourPreview: null, hint: null });
 }

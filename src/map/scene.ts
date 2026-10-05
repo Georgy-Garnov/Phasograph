@@ -8,6 +8,7 @@ import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS 
 import { bearing, destination, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
+import { edgeMidpoints } from '../model/contourEdit';
 import { VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type HouseVoltage, type KtpReading } from '../topology/voltage';
 import { t } from '../i18n';
 
@@ -65,7 +66,35 @@ export function buildScene(state: AppState, highlighted: Set<string>, zoom: numb
   const features = new Map<string, FeatureSpec>();
   collectLines(state, highlighted, zoom, features);
   collectContours(state, features);
-  return { markers: [...buildMarkers(state), ...buildOrientation(state, zoom)], features };
+  return { markers: [...buildMarkers(state), ...buildOrientation(state, zoom), ...buildContourHandles(state)], features };
+}
+
+/**
+ * Drag handles of the outline being edited: corners (`cv:<houseId>:<i>`) and wall middles (`ce:<houseId>:<i>`).
+ * They sit at the draft positions, so re-renders during a drag do not move the handle being dragged.
+ */
+function buildContourHandles(state: AppState): MarkerSpec[] {
+  const edit = state.contourEdit;
+  if (!edit) return [];
+  const corners = edit.points.map((p, i) => ({
+    id: `cv:${edit.houseId}:${i}`,
+    coords: p,
+    className: 'contour-vertex',
+    html: '',
+    title: t('contour.vertexTitle'),
+    draggable: true,
+    zIndex: 40,
+  }));
+  const walls = edgeMidpoints(edit.points).map((p, i) => ({
+    id: `ce:${edit.houseId}:${i}`,
+    coords: p,
+    className: 'contour-edge-handle',
+    html: '',
+    title: t('contour.edgeTitle'),
+    draggable: true,
+    zIndex: 39,
+  }));
+  return [...corners, ...walls];
 }
 
 /** Distance of the rotation handle from the pole, in screen pixels. */
@@ -325,8 +354,30 @@ function wholeLineColor(line: SchemeLine, trace: TraceResult): string {
 }
 
 function collectContours(state: AppState, specs: Map<string, FeatureSpec>) {
+  const edit = state.contourEdit;
+  if (edit) {
+    // Outline being edited: the live preview (while dragging) or the draft; every wall is its own line so the
+    // right-angle magnet can paint it green.
+    const pts = state.contourPreview?.points ?? edit.points;
+    const green = new Set(state.contourPreview?.green ?? []);
+    specs.set(`contour-edit:${edit.houseId}`, {
+      geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] },
+      fill: 'rgba(0,140,255,0.12)',
+      stroke: { color: 'rgba(0,0,0,0)', width: 0 },
+      zIndex: 280,
+      target: null,
+    });
+    pts.forEach((p, i) => {
+      specs.set(`contour-edge:${i}`, {
+        geometry: { type: 'LineString', coordinates: [p, pts[(i + 1) % pts.length]] },
+        stroke: { color: green.has(i) ? '#1f9d3a' : '#008cff', width: green.has(i) ? 4 : 2.5 },
+        zIndex: 290,
+        target: null,
+      });
+    });
+  }
   for (const node of Object.values(state.scheme.nodes)) {
-    if (node.kind !== 'house' || !node.contour) continue;
+    if (node.kind !== 'house' || !node.contour || node.id === edit?.houseId) continue;
     const selected = state.selection?.type === 'node' && state.selection.id === node.id;
     specs.set(`contour:${node.id}`, {
       geometry: { type: 'Polygon', coordinates: [[...node.contour, node.contour[0]]] },

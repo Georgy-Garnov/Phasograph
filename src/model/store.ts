@@ -106,6 +106,10 @@ export interface AppState {
   selectedLamp: string | null;
   /** Terminal from which the conductor is highlighted. */
   focusKey: string | null;
+  /** House outline being edited: a draft, saved to the scheme only on "Finish editing". */
+  contourEdit: { houseId: string; points: LngLat[] } | null;
+  /** Live outline while a vertex or wall handle is dragged, with edges highlighted by the right-angle magnet. */
+  contourPreview: { points: LngLat[]; green: number[] } | null;
   /** Live azimuth while the pole rotation handle is being dragged (not in undo history until dropped). */
   rotatePreview: { poleId: string; azimuth: number } | null;
   view: MapView;
@@ -134,6 +138,8 @@ let state: AppState = {
   focusKey: null,
   selectedLamp: null,
   rotatePreview: null,
+  contourEdit: null,
+  contourPreview: null,
   view: DEFAULT_VIEW,
   settings: loadSettings(),
   hint: null,

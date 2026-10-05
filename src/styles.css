@@ -535,3 +535,31 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 .ktp-readings { display: grid; gap: 2px; font-size: 12px; margin-top: 6px; }
 .tap-seg button { padding: 4px 6px; font-size: 12px; }
 .ktp-summary { cursor: pointer; background: #f3f6f9; border-radius: 6px; padding: 4px 6px; }
+
+/* ---- House outline editing handles ---- */
+.contour-vertex {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #008cff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: move;
+  touch-action: none;
+}
+.contour-vertex::after, .contour-edge-handle::after { content: ''; position: absolute; inset: -10px; }
+.contour-edge-handle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  background: #008cff;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: move;
+  touch-action: none;
+}
+.contour-edit-buttons { flex-wrap: wrap; margin: 6px 0; }

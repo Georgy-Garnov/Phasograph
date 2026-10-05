@@ -16,7 +16,13 @@ import {
   moveNode,
   previewPoleRotation,
   rotatePoleTowards,
+  CONTOUR_SNAP_PX,
+  commitContourEdge,
+  commitContourVertex,
+  previewContourEdge,
+  previewContourVertex,
 } from './interactions';
+import { metersPerPixel } from './geo';
 
 /** Map access from other parts of the UI (flying to an object, etc.). */
 export const mapApi: { flyTo?: (c: LngLat, zoom?: number) => void } = {};
@@ -85,6 +91,10 @@ export function MapView() {
       }
     };
 
+    /** Magnet reach in meters at the current zoom. */
+    const snapTolerance = (at: LngLat) => CONTOUR_SNAP_PX * metersPerPixel(adapter?.zoom ?? 18, at[1]);
+    const handleIndex = (id: string) => Number(id.slice(id.lastIndexOf(':') + 1));
+
     const events: MapEvents = {
       mapClick: handleMapClick,
       mapDblClick: () => {
@@ -101,13 +111,17 @@ export function MapView() {
       },
       viewChange: (view) => store.set({ view }),
       markerClick: (id, part) => {
-        if (!id.startsWith('rot:') && !id.startsWith('orient:')) handleNodeClick(id, part);
+        if (!/^(rot|orient|cv|ce):/.test(id)) handleNodeClick(id, part);
       },
       markerDrag: (id, coords) => {
         if (id.startsWith('rot:')) previewPoleRotation(id.slice(4), coords);
+        else if (id.startsWith('cv:')) previewContourVertex(handleIndex(id), coords, snapTolerance(coords));
+        else if (id.startsWith('ce:')) previewContourEdge(handleIndex(id), coords);
       },
       markerDragEnd: (id, coords) => {
         if (id.startsWith('rot:')) rotatePoleTowards(id.slice(4), coords);
+        else if (id.startsWith('cv:')) commitContourVertex(handleIndex(id), coords, snapTolerance(coords));
+        else if (id.startsWith('ce:')) commitContourEdge(handleIndex(id), coords);
         else moveNode(id, coords);
       },
       featureClick: handleFeatureClick,
@@ -136,6 +150,8 @@ export function MapView() {
           s.contour !== prev.contour ||
           s.photos !== prev.photos ||
           s.rotatePreview !== prev.rotatePreview ||
+          s.contourEdit !== prev.contourEdit ||
+          s.contourPreview !== prev.contourPreview ||
           s.settings.lang !== prev.settings.lang ||
           s.settings.showVoltage !== prev.settings.showVoltage ||
           s.settings.voltageMode !== prev.settings.voltageMode;

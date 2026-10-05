@@ -3,7 +3,7 @@ import { store, useStore } from './model/store';
 import { emptyScheme } from './model/scheme';
 import { MapView, mapApi } from './map/MapView';
 import { searchPlace } from './map/geocoder';
-import { deleteSelection, finishContour, hintForTool, setTool } from './map/interactions';
+import { cancelContourEdit, deleteSelection, finishContour, finishContourEdit, hintForTool, setTool } from './map/interactions';
 import { migrateLegacyStorage } from './storage/projects';
 import { Toolbar } from './ui/Toolbar';
 import { Inspector } from './ui/Inspector';
@@ -127,6 +127,10 @@ function Editor() {
       } else if (mod && e.code === 'KeyY') {
         e.preventDefault();
         store.redo();
+      } else if (e.key === 'Escape' && store.get().contourEdit) {
+        cancelContourEdit();
+      } else if (e.key === 'Enter' && store.get().contourEdit) {
+        finishContourEdit();
       } else if (e.key === 'Escape') {
         const s = store.get();
         if (s.lineStart || s.contour.length) store.set({ lineStart: null, contour: [] });

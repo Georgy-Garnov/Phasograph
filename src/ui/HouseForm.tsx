@@ -2,7 +2,7 @@ import { store, useStore } from '../model/store';
 import type { HouseNode, Phase, PhaseMode } from '../model/types';
 import { PHASES } from '../model/constants';
 import { distanceMeters, linesAt, uid } from '../model/scheme';
-import { refreshAddress } from '../map/interactions';
+import { cancelContourEdit, finishContourEdit, refreshAddress, startContourEdit } from '../map/interactions';
 import type { HouseStatus, HouseTrace } from '../topology/trace';
 import { Field, KtpDistanceInfo, NodeLink, RoleChip, Section, editNode, editScheme } from './common';
 import { lineLength } from '../topology/distances';
@@ -160,6 +160,7 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
         )}
       </div>
 
+      {!compact && house.contour && <ContourEditButtons houseId={house.id} />}
       {!compact && (
         <>
           <Field label={tr('common.note')}>
@@ -239,6 +240,27 @@ function HouseVoltageInfo({ houseId }: { houseId: string }) {
         ({v.dropPct >= 0 ? '−' : '+'}
         {Math.abs(v.dropPct).toFixed(1)}%)
       </span>
+    </div>
+  );
+}
+
+/** "Edit outline" → while editing: "Finish editing" (saves) and "Cancel" (discards the draft). */
+function ContourEditButtons({ houseId }: { houseId: string }) {
+  const tr = useT();
+  const editing = useStore((s) => s.contourEdit?.houseId === houseId);
+  return (
+    <div className="row contour-edit-buttons">
+      {editing ? (
+        <>
+          <button className="primary" onClick={finishContourEdit}>
+            ✔ {tr('contour.finish')}
+          </button>
+          <button onClick={cancelContourEdit}>{tr('contour.cancel')}</button>
+          <span className="muted small">{tr('contour.editHintShort')}</span>
+        </>
+      ) : (
+        <button onClick={() => startContourEdit(houseId)}>✏ {tr('contour.edit')}</button>
+      )}
     </div>
   );
 }

@@ -78,6 +78,9 @@ with attribution; for many users you need your own tile server or a commercial p
    the substation "Lighting" output and needs no separate drawing; the "Street lighting cable" tool is for a
    separate lighting cable (dashed).
 5. **House** — click a building (the address comes from the selected geocoder) or draw its **outline**.
+   "Edit outline" in the house card shows corner and wall handles: drag corners (a magnet snaps them to right
+   angles — the wall turns green — and releases beyond 10 px) or move walls parallel to themselves; changes are a
+   draft until "Finish editing" (Enter), "Cancel" (Esc) discards them.
 6. **Service drop** — click a pole, then a house/entry. In the drop editor, click insulators in the pole diagram to
    set the phase wire and neutral (L1, L2, L3, N for three-phase customers). The house phase is computed and shown
    by the marker color; for ABC it is set manually. Clicking a house outline puts the entry on the wall at that
