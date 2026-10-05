@@ -9,6 +9,7 @@ import { Toolbar } from './ui/Toolbar';
 import { Inspector } from './ui/Inspector';
 import { ReportPanel } from './ui/ReportPanel';
 import { ProjectsScreen } from './ui/ProjectsScreen';
+import { DialogHost, confirmDialog, isDialogOpen, promptDialog } from './ui/dialog';
 import { ProviderSettings } from './ui/Settings';
 import { Legend } from './ui/Legend';
 import { exportProject, type ExportKind } from './ui/projectIO';
@@ -118,7 +119,7 @@ function Editor() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest('input, textarea, select') || document.querySelector('.photo-viewer')) return;
+      if (isDialogOpen() || target.closest('input, textarea, select') || document.querySelector('.photo-viewer')) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.code === 'KeyZ') {
         e.preventDefault();
@@ -155,9 +156,9 @@ function Editor() {
         <button
           className="project-title"
           title={t('topbar.renameTitle')}
-          onClick={() => {
-            const name = prompt(t('projects.renamePrompt'), projectName);
-            if (name?.trim()) void store.renameCurrent(name.trim());
+          onClick={async () => {
+            const name = await promptDialog(t('projects.renamePrompt'), projectName, { okLabel: t('dialog.rename') });
+            if (name) void store.renameCurrent(name);
           }}
         >
           <strong>{projectName}</strong>
@@ -172,7 +173,12 @@ function Editor() {
           ↷
         </button>
         <ExportMenu />
-        <button className="danger" onClick={() => confirm(t('topbar.clearConfirm')) && store.replace(emptyScheme())}>
+        <button
+          className="danger"
+          onClick={async () => {
+            if (await confirmDialog(t('topbar.clearConfirm'), { okLabel: t('dialog.clear'), danger: true })) store.replace(emptyScheme());
+          }}
+        >
           {t('topbar.clear')}
         </button>
       </header>
@@ -218,5 +224,10 @@ export function App() {
   }, []);
 
   if (!ready) return null;
-  return projectId ? <Editor /> : <ProjectsScreen />;
+  return (
+    <>
+      {projectId ? <Editor /> : <ProjectsScreen />}
+      <DialogHost />
+    </>
+  );
 }

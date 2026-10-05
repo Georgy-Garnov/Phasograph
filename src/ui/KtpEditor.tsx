@@ -8,6 +8,7 @@ import { Field, Section, TraceChip, editNode, editScheme } from './common';
 import { feederLengths } from '../topology/distances';
 import { formatLength } from '../i18n/labels';
 import { currentLocale, useT, type MessageKey } from '../i18n';
+import { confirmDialog } from './dialog';
 
 const ROLES: OutputRole[] = ['A', 'B', 'C', 'N', 'L', 'SIP'];
 
@@ -57,8 +58,8 @@ export function KtpEditor({ ktp }: { ktp: KtpNode }) {
               <button
                 className="icon danger"
                 title={t('ktp.removeFeeder')}
-                onClick={() => {
-                  if (!confirm(t('ktp.removeFeederConfirm', { name: f.name }))) return;
+                onClick={async () => {
+                  if (!(await confirmDialog(t('ktp.removeFeederConfirm', { name: f.name }), { okLabel: t('dialog.delete'), danger: true }))) return;
                   editScheme((d) => {
                     const k = d.nodes[ktp.id];
                     if (k?.kind !== 'ktp') return;

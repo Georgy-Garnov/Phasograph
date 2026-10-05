@@ -4,6 +4,7 @@ import { processPhoto } from '../storage/photos';
 import { getPhoto } from '../storage/projects';
 import { currentLocale, useT } from '../i18n';
 import { Section } from './common';
+import { confirmDialog, isDialogOpen } from './dialog';
 
 /**
  * Object photos. "Take photo" on a phone/tablet opens the camera directly (capture="environment");
@@ -129,7 +130,7 @@ function PhotoViewer({
     if (photo && caption !== photo.caption) void store.setPhotoCaption(photo.id, caption);
   };
   const remove = async () => {
-    if (!photo || !confirm(t('photos.deleteConfirm'))) return;
+    if (!photo || !(await confirmDialog(t('photos.deleteConfirm'), { okLabel: t('dialog.delete'), danger: true }))) return;
     const next = photos[index + 1] ?? photos[index - 1];
     await store.deletePhoto(photo.id);
     if (next) onNavigate(next.id);
@@ -139,6 +140,7 @@ function PhotoViewer({
   // Handle keys here and stop propagation: Del must not delete the pole behind the viewer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isDialogOpen()) return;
       if ((e.target as HTMLElement).closest('input, textarea')) {
         if (e.key === 'Escape') (e.target as HTMLElement).blur();
         e.stopPropagation();

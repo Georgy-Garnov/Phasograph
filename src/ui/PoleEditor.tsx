@@ -18,6 +18,7 @@ import { addSipClamp, setInsulatorKind } from '../model/sipOps';
 import { COLOR_UNTRACED, ROLE_COLORS } from '../model/constants';
 import { setPoleAzimuth } from '../map/interactions';
 import { PoleDiagram } from './PoleDiagram';
+import { confirmDialog } from './dialog';
 import { LampsSection } from './LampsSection';
 import { Field, KtpDistanceInfo, MarkSelect, NodeLink, Section, TraceChip, editNode, editScheme, nodeName } from './common';
 import { lineLength } from '../topology/distances';
@@ -225,9 +226,9 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
             </button>
             <button
               className="link"
-              onClick={() => {
+              onClick={async () => {
                 const poles = Object.values(scheme.nodes).filter((n): n is PoleNode => isPole(n) && !isZigzag(n));
-                if (!confirm(t('pole.zigzagAllConfirm', { n: poles.length }))) return;
+                if (!(await confirmDialog(t('pole.zigzagAllConfirm', { n: poles.length }), { okLabel: t('dialog.apply') }))) return;
                 editScheme((d) => {
                   for (const n of Object.values(d.nodes)) if (isPole(n) && !isZigzag(n)) layoutZigzag(n);
                 });

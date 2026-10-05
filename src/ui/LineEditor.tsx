@@ -7,6 +7,7 @@ import { t as tr, useT, type MessageKey } from '../i18n';
 import { CONDUCTORS, CONDUCTOR_GROUPS, conductorsOf, defaultConductorId } from '../model/conductors';
 import { portKey, wireKey } from '../topology/trace';
 import { PoleDiagram } from './PoleDiagram';
+import { confirmDialog } from './dialog';
 import { portMark, setPortMark } from '../model/sip';
 import { HouseForm } from './HouseForm';
 import { Field, MarkSelect, NodeLink, Section, TraceChip, editScheme } from './common';
@@ -96,11 +97,11 @@ function ApplyToRoute({ line }: { line: SchemeLine }) {
   return (
     <button
       className="link small"
-      onClick={() => {
+      onClick={async () => {
         const msg = line.mark.trim()
           ? t('line.applyRouteConfirmMark', { name, mark: line.mark.trim(), n: ids.length })
           : t('line.applyRouteConfirm', { name, n: ids.length });
-        if (!confirm(msg)) return;
+        if (!(await confirmDialog(msg, { title: t('line.applyRouteTitle'), okLabel: t('dialog.apply') }))) return;
         editScheme((d) => {
           for (const id of ids) {
             const l = d.lines[id];

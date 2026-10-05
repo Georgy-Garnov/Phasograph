@@ -11,6 +11,7 @@ import {
 import { currentLocale, useT } from '../i18n';
 import { exportProject, importProjectFile, type ExportKind } from './projectIO';
 import { LanguageSelect } from './Settings';
+import { confirmDialog, promptDialog } from './dialog';
 
 /** Ask the browser not to evict data (otherwise Safari may clear storage of an unused site). */
 async function requestPersistence() {
@@ -61,10 +62,12 @@ export function ProjectsScreen() {
   };
 
   const create = async () => {
-    const name = prompt(t('projects.namePrompt'), t('projects.defaultName', { n: (projects?.length ?? 0) + 1 }));
-    if (!name?.trim()) return;
+    const name = await promptDialog(t('projects.namePrompt'), t('projects.defaultName', { n: (projects?.length ?? 0) + 1 }), {
+      okLabel: t('dialog.create'),
+    });
+    if (!name) return;
     void requestPersistence();
-    const p = await createProject(name.trim());
+    const p = await createProject(name);
     await open(p.id);
   };
 
@@ -163,9 +166,9 @@ export function ProjectsScreen() {
                 GeoJSON
               </button>
               <button
-                onClick={() => {
-                  const name = prompt(t('projects.renamePrompt'), p.name);
-                  if (name?.trim()) void run(p.id, () => renameProject(p.id, name.trim()));
+                onClick={async () => {
+                  const name = await promptDialog(t('projects.renamePrompt'), p.name, { okLabel: t('dialog.rename') });
+                  if (name) void run(p.id, () => renameProject(p.id, name));
                 }}
               >
                 {t('projects.rename')}
@@ -175,8 +178,9 @@ export function ProjectsScreen() {
               </button>
               <button
                 className="danger"
-                onClick={() => {
-                  if (confirm(t('projects.deleteConfirm', { name: p.name }))) void run(p.id, () => deleteProject(p.id));
+                onClick={async () => {
+                  const ok = await confirmDialog(t('projects.deleteConfirm', { name: p.name }), { okLabel: t('dialog.delete'), danger: true });
+                  if (ok) void run(p.id, () => deleteProject(p.id));
                 }}
               >
                 {t('projects.delete')}
