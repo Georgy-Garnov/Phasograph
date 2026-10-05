@@ -11,6 +11,13 @@ const BEHAVIORS = ['drag', 'pinchZoom', 'scrollZoom'] as const;
 /** Scheme customization that hides all geometry and keeps only labels (for the hybrid mode). */
 const LABELS_ONLY = [{ elements: 'geometry', stylers: [{ visibility: 'off' }] }];
 
+/**
+ * Scheme sub-layer order: icons and labels are lifted above the satellite layer (which sits below our features
+ * layer at FEATURES_Z_INDEX) so they stay readable in hybrid mode, but still below our lines and markers.
+ */
+const FEATURES_Z_INDEX = 1800;
+const SCHEME_LAYERS = { icons: { zIndex: FEATURES_Z_INDEX - 20 }, labels: { zIndex: FEATURES_Z_INDEX - 10 } };
+
 function withoutUndefined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 }
@@ -42,7 +49,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
       behaviors: [...BEHAVIORS, 'dblClick'],
       zoomRange: { min: 3, max: 21 },
     });
-    this.scheme = new YMapDefaultSchemeLayer({}) as unknown as LayerEntity;
+    this.scheme = new YMapDefaultSchemeLayer({ layers: SCHEME_LAYERS }) as unknown as LayerEntity;
     this.map.addChild(this.scheme);
     const Satellite = satelliteLayerClass();
     if (Satellite) {
@@ -51,7 +58,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
     }
     this.setBaseLayer(baseLayer);
     // Explicit z-index keeps our lines and markers above the base layers (the satellite layer otherwise covers them).
-    this.map.addChild(new YMapDefaultFeaturesLayer({ zIndex: 1800 }));
+    this.map.addChild(new YMapDefaultFeaturesLayer({ zIndex: FEATURES_Z_INDEX }));
     this.map.addChild(
       new YMapListener({
         layer: 'any',
@@ -89,6 +96,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
     this.scheme.update({
       visible: mode !== 'satellite',
       customization: mode === 'hybrid' ? LABELS_ONLY : [],
+      layers: SCHEME_LAYERS,
     } as never);
   }
 

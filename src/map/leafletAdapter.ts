@@ -19,7 +19,8 @@ const BASE_LAYERS: Record<BaseLayer, () => L.Layer> = {
       attribution: `&copy; <a href="https://www.openstreetmap.org/copyright">${t('map.osmAttribution')}</a>`,
     }),
   satellite: () => esriLayer('World_Imagery', `${t('map.esriAttribution')} &copy; Esri, Maxar, Earthstar Geographics`),
-  // Hybrid: satellite imagery with transparent road and place-name reference layers on top.
+  // Hybrid: satellite imagery with Esri's transparent road and place-name reference layers on top (free and
+  // keyless; note they have no house numbers and street names can be sparse outside cities).
   hybrid: () =>
     L.layerGroup([
       esriLayer('World_Imagery', `${t('map.esriAttribution')} &copy; Esri, Maxar, Earthstar Geographics`),
