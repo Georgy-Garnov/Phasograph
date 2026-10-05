@@ -380,6 +380,36 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 .ins-table .ins-label { font-weight: 600; white-space: nowrap; }
 .ins-table tr.ins-row td { border-bottom: none; padding-top: 4px; }
 .ins-table tr.ins-conn td { padding-top: 0; padding-bottom: 4px; }
+.ins-table tr.core-row td { padding-top: 1px; padding-bottom: 1px; border-bottom: none; }
+.ins-table tr.core-row:last-child td, .ins-table tr.core-row + tr.ins-row td { border-top: none; }
+.ins-table tr.core-row.active { background: #e6f2ff; }
+.core-dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-left: 10px;
+  border: 2px solid #0b0c0d;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+}
+
+/* Magnified ABC cable cross-section under the pole drawing. */
+.cable-zoom {
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px solid #b9d9ff;
+  border-radius: 8px;
+}
+.cable-zoom .row { margin-bottom: 0; }
+.cable-zoom .row .icon { margin-left: auto; }
+.cable-zoom svg { display: block; margin: 4px auto 0; }
+.cable-zoom .cable-core:hover circle { filter: brightness(1.15); }
 
 /* Drag handle on the left edge of the sidebar. */
 .sidebar { position: relative; }

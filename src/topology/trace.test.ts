@@ -139,15 +139,16 @@ describe('traceScheme', () => {
     expect(t.issues.some((i) => i.level === 'error' && i.targetId === p2.id)).toBe(true);
   });
 
-  it('for ABC the feeder is determined but not the phase', () => {
+  it('for a bundle ABC output the feeder is determined but not the phase', () => {
     const s = emptyScheme();
     const ktp = add<KtpNode>(s, createNode('ktp', [0, 0]), 0);
+    ktp.feeders[0].outputs = [{ id: 'sip', index: 1, role: 'SIP' }];
     const p1 = add<PoleNode>(s, createNode('pole04', [0, 0]), 1);
     createLine(s, 'line04', ktp.id, p1.id, 'sip');
-    expect(p1.insulators).toEqual([expect.objectContaining({ type: 'sipClamp' })]);
+    expect(p1.insulators).toEqual([expect.objectContaining({ type: 'sipClamp', cores: '3+N' })]);
     const house = addHouse(s, 2);
     const drop = createLine(s, 'drop', p1.id, house.id, 'bare');
-    expect(drop.wires.every((w) => w.fromPort === p1.insulators[0].id)).toBe(true);
+    drop.wires[0].fromPort = `${p1.insulators[0].id}:0`;
 
     let h = traceScheme(s).houses.get(house.id)!;
     expect(h.status).toBe('sip');

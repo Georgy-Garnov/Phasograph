@@ -73,6 +73,13 @@ with attribution; for many users you need your own tile server or a commercial p
    L1, R2, L3, R4, L5; the same number left and right is a crossarm; "center" (C) insulators sit on the pole body,
    e.g. a branch on a T-junction pole), type (pin / ABC clamp), jumpers ("⚡ Jumper" and a click on two insulators
    in the diagram), connected wires. Clicking an insulator highlights the wire along its whole length.
+   **ABC (SIP) cable** — a clamp holds a cable with a core set: 1+N (phase + neutral), 3+N, or 3+N+L (with a street
+   lighting core). Cores are marked as on the cable (GOST 31946: phases 1, 2, 3 with as many ribs, neutral 0,
+   lighting 4) and colored by the traced phase; every core is its own connection point for spans, drops, luminaires and
+   jumpers, so the phase is traced through ABC. Clicking the cable on the pole drawing magnifies its cross-section for
+   picking a core. The cable type set on one clamp applies to the whole ABC run. Laying an ABC span from a pole with
+   bare wires adds a clamp with jumpers from the insulators to the cores of the same roles. On the map an ABC span is a
+   black sheath with the colored cores inside. Bundle clamps of older projects are converted on opening.
 4. **Junctions** — the span card sets, for every wire, the insulator on the next pole ("was on L2 up to pole X →
    continues on R1 of pole Y"); "By position" matches identical positions. The lighting wire on the same crossarm is
    the substation "Lighting" output and needs no separate drawing; the "Street lighting cable" tool is for a
@@ -85,7 +92,8 @@ with attribution; for many users you need your own tile server or a commercial p
    on the walls keep their wall and position along it, so they and their drops follow outline edits and house moves.
 6. **Service drop** — click a pole, then a house/entry. In the drop editor, click insulators in the pole diagram to
    set the phase wire and neutral (L1, L2, L3, N for three-phase customers). The house phase is computed and shown
-   by the marker color; for ABC it is set manually. Clicking a house outline puts the entry on the wall at that
+   by the marker color; on an ABC cable pick the core in the magnified cross-section (with a bundle substation output
+   the phase is set manually). Clicking a house outline puts the entry on the wall at that
    point; fiber is brought into houses the same way.
 7. **Luminaire on pole** — clicking a pole hangs a luminaire and connects it to the lighting wire (L) and neutral;
    the pole card has a "Street lighting" section with type, power, supply and neutral insulators. The map shows ✹
@@ -143,10 +151,10 @@ Export adds `properties.trace` (computed phases of houses and wires); it is igno
 
 ## Tracing algorithm
 
-`src/topology/trace.ts`. Graph vertices are terminals (substation output, insulator, wire end at an entry), edges
+`src/topology/trace.ts`. Graph vertices are terminals (substation output, insulator, ABC core, wire end at an entry), edges
 are wires and jumpers. A breadth-first search with a `{feeder, role}` label starts from every substation output.
-An ABC clamp (and an "ABC" output) merges the cores: labels behind it are marked as "bundled" — the feeder is known,
-the phase is not. A single-phase house gets the only unambiguous phase among the wires of its drops. Manual wire
+Every core of an ABC cable is a separate terminal, so phases pass through ABC unchanged; only an "ABC" substation
+output (a bundle with unknown cores) marks labels as "bundled" — the feeder is known, the phase is not. A single-phase house gets the only unambiguous phase among the wires of its drops. Manual wire
 markings act as extra sources and are checked against the substation tracing.
 
 ## Project structure

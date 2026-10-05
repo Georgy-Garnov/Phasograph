@@ -7,6 +7,7 @@ import { t as tr, useT, type MessageKey } from '../i18n';
 import { CONDUCTORS, CONDUCTOR_GROUPS, conductorsOf, defaultConductorId } from '../model/conductors';
 import { portKey, wireKey } from '../topology/trace';
 import { PoleDiagram } from './PoleDiagram';
+import { portMark, setPortMark } from '../model/sip';
 import { HouseForm } from './HouseForm';
 import { Field, MarkSelect, NodeLink, Section, TraceChip, editScheme } from './common';
 import { cachedDistances, lineLength } from '../topology/distances';
@@ -58,7 +59,7 @@ function LineStats({ line }: { line: SchemeLine }) {
   );
 }
 
-/** Span wire marking is stored on the pole insulator (at the span start, or at the end if the start is a TS). */
+/** Span wire marking is stored on the pole insulator or ABC core (at the span start, or at the end if the start is a TS). */
 function WireMark({ line, wireIndex }: { line: SchemeLine; wireIndex: number }) {
   const t = useT();
   const scheme = useStore((s) => s.scheme);
@@ -69,15 +70,13 @@ function WireMark({ line, wireIndex }: { line: SchemeLine; wireIndex: number }) 
   ].find(({ node, port }) => isPole(node) && port);
   if (!end) return <span className="muted small">{t('line.noInsulator')}</span>;
   const pole = end.node as PoleNode;
-  const ins = pole.insulators.find((i) => i.id === end.port);
   return (
     <MarkSelect
-      value={ins?.mark}
+      value={portMark(pole, end.port!)}
       onChange={(mark) =>
         editScheme((d) => {
           const p = d.nodes[pole.id];
-          const target = isPole(p) ? p.insulators.find((i) => i.id === end.port) : undefined;
-          if (target) target.mark = mark;
+          if (isPole(p)) setPortMark(p, end.port!, mark);
         })
       }
     />

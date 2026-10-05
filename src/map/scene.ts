@@ -11,6 +11,7 @@ import { metersPerPixel, offsetSegment } from './geo';
 import { contourCenter, edgeMidpoints } from '../model/contourEdit';
 import { VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type HouseVoltage, type KtpReading } from '../topology/voltage';
 import { t } from '../i18n';
+import { splitPort } from '../model/sip';
 
 /** Below this zoom parallel wires are drawn closer together. */
 const DENSE_ZOOM = 16;
@@ -307,7 +308,39 @@ function collectLines(
       target,
     });
 
-    // Separate wires (crossarm) are always drawn as parallel lines; ABC as one thick line.
+    // ABC cable: a black sheath with its cores drawn inside in their phase colors.
+    if (isCableSpan(line, a, b)) {
+      const cores = cableCores(line, a, b);
+      const lit = line.wires.some((w) => highlighted.has(wireKey(line.id, w.id)));
+      const dense = zoom >= DENSE_ZOOM;
+      const step = 1.9;
+      specs.set(`line:${line.id}`, {
+        geometry: { type: 'LineString', coordinates: coords },
+        stroke: { color: CABLE_SHEATH, width: dense ? 3 + step * cores.length : 5, opacity: dim && !lit ? 0.3 : 1 },
+        zIndex: 200,
+        target,
+      });
+      if (!dense) continue;
+      const mpp = metersPerPixel(zoom, a.coords[1]);
+      cores.forEach((w, i) => {
+        const wk = wireKey(line.id, w.id);
+        const color = conductorColor(trace.wires.get(wk));
+        specs.set(`wire:${wk}`, {
+          geometry: { type: 'LineString', coordinates: offsetSegment(a.coords, b.coords, ((cores.length - 1) / 2 - i) * step * mpp) },
+          stroke: {
+            color: color === COLOR_BUNDLE ? '#7d8590' : color,
+            width: highlighted.has(wk) ? 2.4 : 1.3,
+            dash: isDangling(w, a, b) ? [2, 2] : undefined,
+            opacity: dim && !highlighted.has(wk) ? 0.3 : 1,
+          },
+          zIndex: highlighted.has(wk) ? 262 : 222,
+          target: { type: 'line', id: line.id, wireId: w.id },
+        });
+      });
+      continue;
+    }
+
+    // Separate wires (crossarm) are always drawn as parallel lines.
     const split = isWired(line.kind) && line.suspension === 'bare' && line.wires.length > 1;
     if (!split) {
       const empty = isWired(line.kind) && line.wires.length === 0;
@@ -367,8 +400,31 @@ function orderWires(scheme: Scheme, line: SchemeLine, from: SchemeNode, to: Sche
     const right = sortInsulators(pole.insulators.filter((i) => i.side === 'R'));
     [...left, ...center, ...right].forEach((ins, i) => rank.set(ins.id, i));
   }
-  const sorted = [...line.wires].sort((x, y) => (rank.get(portOf(x)) ?? 999) - (rank.get(portOf(y)) ?? 999));
+  const rankOf = (w: Wire) => {
+    const { insId, core } = splitPort(portOf(w));
+    return (rank.get(insId) ?? 999) + (core ?? 0) / 10;
+  };
+  const sorted = [...line.wires].sort((x, y) => rankOf(x) - rankOf(y));
   return facingAgainst ? sorted.reverse() : sorted;
+}
+
+const CABLE_SHEATH = '#15171a';
+
+/** A span drawn as an ABC cable: laid as ABC, or every wire end on a pole sits on a cable core. */
+function isCableSpan(line: SchemeLine, from: SchemeNode, to: SchemeNode): boolean {
+  if (!isWired(line.kind) || line.kind === 'drop' || line.wires.length === 0) return false;
+  if (line.suspension === 'sip') return true;
+  const onCore = (node: SchemeNode, port: string | null) => !isPole(node) || (!!port && splitPort(port).core !== null);
+  return line.wires.every((w) => onCore(from, w.fromPort) && onCore(to, w.toPort)) && (isPole(from) || isPole(to));
+}
+
+/** Cable cores in their order in the clamp. */
+function cableCores(line: SchemeLine, from: SchemeNode, to: SchemeNode): Wire[] {
+  const core = (w: Wire) => {
+    const p = isPole(to) ? w.toPort : isPole(from) ? w.fromPort : null;
+    return p ? (splitPort(p).core ?? 99) : 99;
+  };
+  return [...line.wires].sort((x, y) => core(x) - core(y));
 }
 
 /** Smallest absolute difference between two bearings, 0..180°. */

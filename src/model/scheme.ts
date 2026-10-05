@@ -19,6 +19,8 @@ import type {
 } from './types';
 import { WIRED_LINE_KINDS } from './constants';
 import { pointAtWall, wallPosition } from './contourEdit';
+import { MARKING_ROLE, coreMarkings, coreWithMarking, insulatorPorts, polePorts, portInsulator, portMarking } from './sip';
+import { cableClamp, dropPortsFromCable, sipCableWires, type RoleOf } from './sipOps';
 
 let counter = 0;
 export function uid(prefix: string): string {
@@ -187,13 +189,15 @@ export function addInsulator(pole: PoleNode, side: Side, type: InsulatorType = '
 
 /** Removes an insulator and detaches wires and jumpers from it. */
 export function removeInsulator(scheme: Scheme, pole: PoleNode, insId: string): void {
+  const ins = pole.insulators.find((i) => i.id === insId);
+  const ports = new Set([insId, ...(ins ? insulatorPorts(ins) : [])]);
   pole.insulators = pole.insulators.filter((i) => i.id !== insId);
-  pole.jumpers = pole.jumpers.filter((j) => j.a !== insId && j.b !== insId);
+  pole.jumpers = pole.jumpers.filter((j) => !ports.has(j.a) && !ports.has(j.b));
   for (const lamp of pole.lamps) {
-    if (lamp.phasePort === insId) lamp.phasePort = null;
-    if (lamp.neutralPort === insId) lamp.neutralPort = null;
+    if (lamp.phasePort && ports.has(lamp.phasePort)) lamp.phasePort = null;
+    if (lamp.neutralPort && ports.has(lamp.neutralPort)) lamp.neutralPort = null;
   }
-  detachPort(scheme, pole.id, insId);
+  for (const p of ports) detachPort(scheme, pole.id, p);
 }
 
 export function detachPort(scheme: Scheme, nodeId: string, portId: string): void {
@@ -280,10 +284,6 @@ function sourcePorts(scheme: Scheme, kind: LineKind, suspension: Suspension, fro
     // Separate lighting wire: a new insulator on the right (connected to the luminaire phase by a jumper).
     return ports.size ? [...ports] : [addInsulator(from, 'R').id];
   }
-  if (suspension === 'sip') {
-    const clamp = from.insulators.find((i) => i.type === 'sipClamp') ?? addInsulator(from, 'R', 'sipClamp');
-    return [clamp.id];
-  }
   const pins = sortInsulators(from.insulators.filter((i) => i.type === 'pin'));
   // The main line starts from an "empty" pole: place a standard crossarm (A, B, C, N, lighting).
   return pins.length ? pins.map((i) => i.id) : addDefaultPins(from, DEFAULT_WIRE_COUNT);
@@ -315,6 +315,7 @@ export function createLine(
   fromId: string,
   toId: string,
   suspension: Suspension,
+  roleOf?: RoleOf,
 ): SchemeLine {
   // The substation is always at the start of the line — this keeps tracing and the UI simpler.
   if (scheme.nodes[toId]?.kind === 'ktp' && scheme.nodes[fromId]?.kind !== 'ktp') [fromId, toId] = [toId, fromId];
@@ -334,11 +335,18 @@ export function createLine(
   scheme.lines[line.id] = line;
   if (!isWired(kind) || !from || !to) return line;
 
+  if (suspension === 'sip' && kind === 'line04' && isPole(to)) {
+    line.wires = sipCableWires(scheme, from, to, roleOf);
+    return line;
+  }
+
   let src: (string | null)[];
   if (kind === 'drop') {
     const n = dropWireCount(scheme, toId);
-    if (isPole(from) && from.insulators.length && from.insulators.every((i) => i.type === 'sipClamp')) {
-      src = Array(n).fill(from.insulators[0].id);
+    const cable = isPole(from) && from.insulators.every((i) => i.type === 'sipClamp') ? cableClamp(from) : undefined;
+    if (cable) {
+      // A pole with only an ABC cable: phase and neutral cores (the phase core is known for a single-phase cable).
+      src = dropPortsFromCable(cable, n);
     } else if (from.kind === 'poleService' && from.insulators.length) {
       src = sortInsulators(from.insulators).map((i) => i.id);
     } else {
@@ -348,7 +356,7 @@ export function createLine(
     src = sourcePorts(scheme, kind, suspension, from);
   }
 
-  const targetPorts = mapTargetPorts(scheme, from, to, src, suspension, kind);
+  const targetPorts = mapTargetPorts(scheme, from, to, src);
   line.wires = src.map((fromPort, i) => ({ id: uid('w'), fromPort, toPort: targetPorts[i] }));
   return line;
 }
@@ -358,15 +366,8 @@ function mapTargetPorts(
   from: SchemeNode,
   to: SchemeNode,
   src: (string | null)[],
-  suspension: Suspension,
-  kind: LineKind,
 ): (string | null)[] {
   if (!isPole(to)) return src.map(() => null);
-
-  if (suspension === 'sip' && kind !== 'drop') {
-    const clamp = to.insulators.find((i) => i.type === 'sipClamp') ?? addInsulator(to, 'R', 'sipClamp');
-    return src.map(() => clamp.id);
-  }
 
   // Insulators already used by parallel lines between the same nodes (shared suspension of feeders).
   const occupied = new Set<string>();
@@ -428,14 +429,17 @@ export function mapWiresByPosition(scheme: Scheme, line: SchemeLine): void {
   const to = scheme.nodes[line.to];
   if (!isPole(to)) return;
   for (const w of line.wires) {
-    const src = isPole(from) ? from.insulators.find((i) => i.id === w.fromPort) : undefined;
+    const src = isPole(from) && w.fromPort ? portInsulator(from, w.fromPort) : undefined;
     if (!src) continue;
     let target = to.insulators.find((i) => i.side === src.side && i.position === src.position);
     if (!target) {
       target = { id: uid('ins'), side: src.side, position: src.position, type: src.type };
+      if (src.cores) target.cores = src.cores;
       to.insulators.push(target);
     }
-    w.toPort = target.id;
+    // A core arrives at the core with the same marking.
+    const marking = portMarking(from as PoleNode, w.fromPort!);
+    w.toPort = marking ? coreWithMarking(target, marking) : coreMarkings(target).length ? null : target.id;
   }
 }
 
@@ -445,6 +449,20 @@ export function assignFeeder(scheme: Scheme, line: SchemeLine, feederId: string)
   if (ktp?.kind !== 'ktp') return;
   const feeder = ktp.feeders.find((f) => f.id === feederId);
   if (!feeder) return;
+  const to = scheme.nodes[line.to];
+  const cored = isPole(to) && line.wires.some((w) => w.toPort && portMarking(to, w.toPort));
+  if (cored) {
+    // ABC cores: each core takes the output of its role (a bundle output feeds every core).
+    const bundle = feeder.outputs.find((o) => o.role === 'SIP');
+    for (const w of line.wires) {
+      const m = w.toPort ? portMarking(to, w.toPort) : null;
+      if (!m) continue;
+      const own = feeder.outputs.find((o) => o.role === MARKING_ROLE[m]);
+      const anyPhase = m === '1' && coreMarkings(portInsulator(to, w.toPort!)!).length === 2;
+      w.fromPort = (own ?? (anyPhase ? feeder.outputs.find((o) => ['A', 'B', 'C'].includes(o.role)) : undefined) ?? bundle)?.id ?? null;
+    }
+    return;
+  }
   const outs = feeder.outputs.filter((o) => (line.suspension === 'sip' ? true : o.role !== 'SIP'));
   outs.forEach((o, i) => {
     const w = line.wires[i] ?? addWire(line);
@@ -483,8 +501,8 @@ export function isZigzag(pole: PoleNode): boolean {
  * Adds a luminaire to a pole. The connection is chosen by insulator roles (tracing or manual marking):
  * supply — from the lighting wire (L), otherwise unset; neutral — from the N insulator.
  */
-export function addLamp(pole: PoleNode, roleOf: (insulatorId: string) => Role | null): Lamp {
-  const find = (role: Role) => pole.insulators.find((i) => roleOf(i.id) === role)?.id ?? null;
+export function addLamp(pole: PoleNode, roleOf: (portId: string) => Role | null): Lamp {
+  const find = (role: Role) => polePorts(pole).find((p) => roleOf(p) === role) ?? null;
   const lamp: Lamp = { id: uid('lamp'), kind: 'led', powerW: '', phasePort: find('L'), neutralPort: find('N') };
   pole.lamps.push(lamp);
   return lamp;

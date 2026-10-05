@@ -24,6 +24,7 @@ import { highlightWires, portKey, type TraceResult } from '../topology/trace';
 import { reverseGeocode } from './geocoder';
 import type { FeatureTarget } from './scene';
 import { moveEdge, rotateContour, snapVertex, translateContour } from '../model/contourEdit';
+import { polePorts, portMark } from '../model/sip';
 
 const LINE_ENDPOINTS: Record<LineKind, { start: NodeKind[]; end: NodeKind[]; autoNode: NodeKind | null }> = {
   line10: { start: ['ktp', 'pole10'], end: ['ktp', 'pole10'], autoNode: 'pole10' },
@@ -138,16 +139,16 @@ function autoPickDrop(d: Scheme, lineId: string, trace: TraceResult) {
   const pole = d.nodes[line.from];
   if (!isPole(pole) || line.wires.some((w) => w.fromPort)) return;
   const roleAt = (role: Role) =>
-    pole.insulators.find((i) => {
-      const t = trace.ports.get(portKey(pole.id, i.id));
+    polePorts(pole).find((p) => {
+      const t = trace.ports.get(portKey(pole.id, p));
       return t && !t.conflict && t.roles.length === 1 && t.roles[0] === role;
-    })?.id ?? null;
+    }) ?? null;
   const house = houseOf(d, line.to);
   const roles: (Role | null)[] =
     line.wires.length >= 4 ? ['A', 'B', 'C', 'N'] : [house?.manualPhase ?? null, 'N'];
   line.wires.forEach((w, i) => {
     const r = roles[i];
-    if (r) w.fromPort = roleAt(r);
+    if (r) w.fromPort = roleAt(r) ?? w.fromPort;
   });
 }
 
@@ -159,7 +160,10 @@ function finishLineTo(endId: string) {
   const startId = s.lineStart;
   const suspension = kind === 'line04' ? s.suspension : 'bare';
   const lineId = store.edit((d) => {
-    const line = createLine(d, kind, startId, endId, suspension);
+    const line = createLine(d, kind, startId, endId, suspension, (nodeId, portId) => {
+      const t = s.trace.ports.get(portKey(nodeId, portId));
+      return t && !t.conflict && t.roles.length === 1 ? t.roles[0] : null;
+    });
     if (kind === 'drop') autoPickDrop(d, line.id, s.trace);
     return line.id;
   });
@@ -178,7 +182,7 @@ function roleOfInsulator(poleId: string): (insId: string) => Role | null {
   return (insId) => {
     const t = trace.ports.get(portKey(poleId, insId));
     if (t && !t.conflict && t.roles.length === 1) return t.roles[0];
-    return (isPole(pole) && pole.insulators.find((i) => i.id === insId)?.mark) || null;
+    return (isPole(pole) && portMark(pole, insId)) || null;
   };
 }
 

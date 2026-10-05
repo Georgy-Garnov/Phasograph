@@ -59,6 +59,11 @@ export interface KtpNode extends NodeBase {
 export type Side = 'L' | 'R' | 'C' | 'B';
 /** pin — pin insulator/hook for a separate wire; sipClamp — anchor/suspension clamp for an ABC bundle. */
 export type InsulatorType = 'pin' | 'sipClamp';
+/**
+ * Core set of an ABC (SIP) cable: one phase + neutral, three phases + neutral,
+ * or three phases + neutral + street lighting core.
+ */
+export type SipCores = '1+N' | '3+N' | '3+N+L';
 
 export interface Insulator {
   id: string;
@@ -68,6 +73,13 @@ export interface Insulator {
   type: InsulatorType;
   /** Manual marking of the conductor on the insulator (the operator knows which wire it is). */
   mark?: Role | null;
+  /**
+   * ABC clamp: cores of the cable held by the clamp. Every core is a separate port `${id}:${k}` (see model/sip.ts);
+   * a clamp without cores is a legacy bundle whose cores are not distinguished.
+   */
+  cores?: SipCores;
+  /** ABC clamp: manual marking per core (same index as the cores). */
+  coreMarks?: (Role | null)[];
 }
 
 /** Jumper (loop) on a pole between two insulators — used for switching at junctions. */

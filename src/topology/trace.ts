@@ -2,14 +2,16 @@
  * Topological analysis of the scheme: tracing conductors from substation outputs
  * through span wires and pole jumpers to house service entries.
  *
- * Graph: vertices are "terminals" (pole insulator, substation output, wire end at a service entry/house),
+ * Graph: vertices are "terminals" (pole insulator or ABC cable core, substation output, wire end at a service entry/house),
  * edges are span/service drop wires and pole jumpers.
  * A breadth-first search with a {feeder, role} label runs from each substation output.
- * An ABC clamp (and an ABC-type substation output) merges all cores of the bundle: labels passing
+ * A clamp with a known core set exposes every core as a terminal, so phases pass through ABC unchanged.
+ * A legacy clamp without cores (and an ABC-type substation output) merges all cores of the bundle: labels passing
  * through it are marked as bundled — the feeder is known, but the specific phase is not.
  */
 import type { Phase, Role, Scheme, SchemeLine, SchemeNode } from '../model/types';
 import { isPole, isWired } from '../model/scheme';
+import { coreMarkings, hasPolePort, polePorts, portMark } from '../model/sip';
 import type { MessageKey } from '../i18n';
 
 export interface Label {
@@ -107,7 +109,7 @@ const PHASE_ORDER: Phase[] = ['A', 'B', 'C'];
 
 function hasPort(node: SchemeNode, portId: string): boolean {
   if (node.kind === 'ktp') return node.feeders.some((f) => f.outputs.some((o) => o.id === portId));
-  if (isPole(node)) return node.insulators.some((i) => i.id === portId);
+  if (isPole(node)) return hasPolePort(node, portId);
   return false;
 }
 
@@ -150,7 +152,9 @@ export function traceScheme(scheme: Scheme): TraceResult {
   // --- Pole terminals and jumpers ---
   for (const node of Object.values(scheme.nodes)) {
     if (!isPole(node)) continue;
-    for (const ins of node.insulators) if (ins.type === 'sipClamp') bundlePorts.add(portKey(node.id, ins.id));
+    for (const ins of node.insulators) {
+      if (ins.type === 'sipClamp' && !coreMarkings(ins).length) bundlePorts.add(portKey(node.id, ins.id));
+    }
     for (const j of node.jumpers) {
       if (!hasPort(node, j.a) || !hasPort(node, j.b)) continue;
       addEdge(portKey(node.id, j.a), portKey(node.id, j.b), null);
@@ -229,11 +233,12 @@ export function traceScheme(scheme: Scheme): TraceResult {
   const marks: { node: SchemeNode; insId: string; key: string; mark: Role }[] = [];
   for (const node of Object.values(scheme.nodes)) {
     if (!isPole(node)) continue;
-    for (const ins of node.insulators) {
-      if (!ins.mark) continue;
-      const key = portKey(node.id, ins.id);
-      marks.push({ node, insId: ins.id, key, mark: ins.mark });
-      visit(key, { feederId: MANUAL_FEEDER, role: ins.mark, bundled: false });
+    for (const portId of polePorts(node)) {
+      const mark = portMark(node, portId);
+      if (!mark) continue;
+      const key = portKey(node.id, portId);
+      marks.push({ node, insId: portId, key, mark });
+      visit(key, { feederId: MANUAL_FEEDER, role: mark, bundled: false });
     }
   }
 
@@ -256,7 +261,7 @@ export function traceScheme(scheme: Scheme): TraceResult {
     if (!isPole(node) && node.kind !== 'ktp') continue;
     const shorts: string[] = [];
     const mixedFeeders = new Set<string>();
-    const portIds = node.kind === 'ktp' ? node.feeders.flatMap((f) => f.outputs.map((o) => o.id)) : node.insulators.map((i) => i.id);
+    const portIds = node.kind === 'ktp' ? node.feeders.flatMap((f) => f.outputs.map((o) => o.id)) : polePorts(node);
     for (const pid of portIds) {
       const key = portKey(node.id, pid);
       if (bundlePorts.has(key)) continue;

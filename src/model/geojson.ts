@@ -12,6 +12,8 @@ import type { LineKind, LngLat, MapView, NodeKind, Role, Scheme, SchemeLine, Sch
 import { centroid, createNode, distanceMeters, emptyScheme, normalizeAngle } from './scheme';
 import { CONDUCTORS } from './conductors';
 import { TAP_POSITIONS } from './transformers';
+import { SIP_CORE_TYPES } from './sip';
+import { upgradeLegacySip } from './sipOps';
 import type { TraceResult } from '../topology/trace';
 import { wireKey } from '../topology/trace';
 
@@ -193,6 +195,8 @@ export function importGeoJSON(input: unknown): ImportResult {
     };
     scheme.lines[id] = line;
   }
+  // Older projects: bundle clamps without cores get a core set and their wires are spread over the cores.
+  upgradeLegacySip(scheme);
   const view = data.view && isLngLat(data.view.center) ? data.view : undefined;
   return { scheme, view, name: typeof data.name === 'string' ? data.name : undefined, photos, warnings };
 }
@@ -240,6 +244,10 @@ function sanitizeNode(node: SchemeNode): void {
         position: Number(i.position) || k + 1,
         type: i.type === 'sipClamp' ? 'sipClamp' : 'pin',
         ...(ROLES.includes(i.mark as Role) ? { mark: i.mark as Role } : {}),
+        ...(i.type === 'sipClamp' && SIP_CORE_TYPES.includes(i.cores as never) ? { cores: i.cores as never } : {}),
+        ...(i.type === 'sipClamp' && Array.isArray(i.coreMarks)
+          ? { coreMarks: (i.coreMarks as unknown[]).map((m) => (ROLES.includes(m as Role) ? (m as Role) : null)) }
+          : {}),
       }));
       node.jumpers = arr<Json>(node.jumpers).map((j, k) => ({ id: str(j.id, `j${k + 1}`), a: str(j.a), b: str(j.b) }));
       node.lamps = arr<Json>(node.lamps).map((l, k) => ({

@@ -3,7 +3,8 @@ import { store, useStore } from '../model/store';
 import { removeLamp } from '../map/interactions';
 import type { Lamp, LampKind, PoleNode } from '../model/types';
 import { t as tr, useT, type MessageKey } from '../i18n';
-import { insLabel } from '../i18n/labels';
+import { portLabel } from '../i18n/labels';
+import { polePorts, portMark } from '../model/sip';
 
 const LAMP_KINDS: LampKind[] = ['led', 'dnat', 'drl', 'other'];
 import { addLamp, sortInsulators } from '../model/scheme';
@@ -24,7 +25,7 @@ export function LampsSection({ pole }: { pole: PoleNode }) {
       sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [selectedLamp, pole.lamps]);
-  const insulators = sortInsulators(pole.insulators);
+  const ports = polePorts(pole, sortInsulators(pole.insulators));
 
   const editLamp = (id: string, fn: (l: Lamp) => void, coalesce?: string) =>
     editNode(
@@ -40,17 +41,17 @@ export function LampsSection({ pole }: { pole: PoleNode }) {
   const roleOf = (insId: string) => {
     const pt = trace.ports.get(portKey(pole.id, insId));
     if (pt && !pt.conflict && pt.roles.length === 1) return pt.roles[0];
-    return pole.insulators.find((i) => i.id === insId)?.mark ?? null;
+    return portMark(pole, insId);
   };
 
   const portOptions = (
     <>
       <option value="">{t('lamp.notConnected')}</option>
-      {insulators.map((i) => {
-        const r = roleOf(i.id);
+      {ports.map((p) => {
+        const r = roleOf(p);
         return (
-          <option key={i.id} value={i.id}>
-            {insLabel(i)}
+          <option key={p} value={p}>
+            {portLabel(pole, p)}
             {r ? ` (${r === 'L' ? t('lamp.roleLighting') : r === 'P' ? t('lamp.rolePhaseUnknown') : r})` : ''}
           </option>
         );

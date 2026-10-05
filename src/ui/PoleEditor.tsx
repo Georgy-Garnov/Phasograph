@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { store, useStore } from '../model/store';
-import type { PoleKind, PoleNode, Side } from '../model/types';
+import type { Insulator, PoleKind, PoleNode, Side, SipCores } from '../model/types';
 import {
   addInsulator,
   isPole,
@@ -13,12 +13,15 @@ import {
   uid,
 } from '../model/scheme';
 import { portKey } from '../topology/trace';
+import { SIP_CORE_TYPES, coreMarkings, corePort, polePorts, portMark, setPortMark } from '../model/sip';
+import { addSipClamp, setInsulatorKind } from '../model/sipOps';
+import { COLOR_UNTRACED, ROLE_COLORS } from '../model/constants';
 import { setPoleAzimuth } from '../map/interactions';
 import { PoleDiagram } from './PoleDiagram';
 import { LampsSection } from './LampsSection';
 import { Field, KtpDistanceInfo, MarkSelect, NodeLink, Section, TraceChip, editNode, editScheme, nodeName } from './common';
 import { lineLength } from '../topology/distances';
-import { formatLength, insLabel, lineKindLabel, nodeKindLabel } from '../i18n/labels';
+import { formatLength, insLabel, lineKindLabel, nodeKindLabel, portLabel, portOptions } from '../i18n/labels';
 import { useT } from '../i18n';
 
 export function PoleEditor({ pole }: { pole: PoleNode }) {
@@ -69,15 +72,58 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
     }
     for (const j of pole.jumpers) {
       const other = j.a === insId ? j.b : j.b === insId ? j.a : null;
-      const ins = other && pole.insulators.find((i) => i.id === other);
-      if (ins) items.push(t('pole.conn.jumper', { ins: insLabel(ins) }));
+      if (other) items.push(t('pole.conn.jumper', { ins: portLabel(pole, other) }));
+    }
+    for (const lamp of pole.lamps) {
+      if (lamp.phasePort === insId || lamp.neutralPort === insId) items.push(t('pole.conn.lamp'));
     }
     return items;
   };
 
-  const add = (side: Side, type: 'pin' | 'sipClamp' = 'pin') =>
+  const add = (side: Side) =>
     editNode(pole.id, pole.kind, (p) => {
-      addInsulator(p, side, type);
+      addInsulator(p, side);
+    });
+  const addCable = () => editNode(pole.id, pole.kind, (p) => void addSipClamp(p, '3+N+L'));
+
+  const setKind = (ins: Insulator, kind: 'pin' | SipCores) => {
+    let changed = 0;
+    editScheme((d) => {
+      const p = d.nodes[pole.id];
+      if (isPole(p)) changed = setInsulatorKind(d, p, ins.id, kind);
+    });
+    if (changed > 1) store.set({ hint: t('pole.cableRunApplied', { n: changed }) });
+  };
+
+  /** Core rows of an ABC clamp: marking, manual mark, traced phase and connections of every core. */
+  const coreRows = (ins: Insulator) =>
+    coreMarkings(ins).map((m, k) => {
+      const p = corePort(ins.id, k);
+      const pt = trace.ports.get(portKey(pole.id, p));
+      const color = pt && !pt.conflict && pt.roles.length === 1 ? ROLE_COLORS[pt.roles[0]] : COLOR_UNTRACED;
+      return (
+        <tr key={p} className={selectedIns === p ? 'core-row active' : 'core-row'} onClick={() => focus(p)}>
+          <td />
+          <td className="ins-label" title={t('pole.coreTitle', { m })}>
+            <span className="core-dot" style={{ background: color }}>
+              {m}
+            </span>
+          </td>
+          <td colSpan={2} className="small muted">
+            {connections(p).join('; ') || t('pole.free')}
+          </td>
+          <td>
+            <MarkSelect
+              value={portMark(pole, p)}
+              onChange={(mark) => editNode(pole.id, pole.kind, (pp) => setPortMark(pp, p, mark))}
+            />
+          </td>
+          <td>
+            <TraceChip trace={pt} />
+          </td>
+          <td />
+        </tr>
+      );
     });
 
   return (
@@ -139,7 +185,7 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
               {t('pole.addBack')}
             </button>
             <button onClick={() => add('R')}>{t('pole.addRight')}</button>
-            <button onClick={() => add('R', 'sipClamp')} title={t('pole.addSipTitle')}>
+            <button onClick={addCable} title={t('pole.addSipTitle')}>
               {t('pole.addSip')}
             </button>
           </div>
@@ -155,7 +201,7 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
         <div className="row">
           <button
             className={jumperMode ? 'on-accent' : ''}
-            disabled={pole.insulators.length < 2}
+            disabled={polePorts(pole).length < 2}
             onClick={() => {
               setJumperMode(!jumperMode);
               setJumperFirst(null);
@@ -212,17 +258,18 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                 <td className="ins-label">{insLabel(ins)}</td>
                 <td>
                   <select
-                    value={ins.type}
+                    value={ins.type === 'pin' ? 'pin' : (ins.cores ?? '')}
+                    title={t('pole.typeTitle')}
                     onClick={(e) => e.stopPropagation()}
-                    onChange={(e) =>
-                      editNode(pole.id, pole.kind, (p) => {
-                        const i = p.insulators.find((x) => x.id === ins.id);
-                        if (i) i.type = e.target.value as 'pin' | 'sipClamp';
-                      })
-                    }
+                    onChange={(e) => setKind(ins, e.target.value as 'pin' | SipCores)}
                   >
                     <option value="pin">{t('ins.type.pin')}</option>
-                    <option value="sipClamp">{t('ins.type.sipClamp')}</option>
+                    {!ins.cores && ins.type === 'sipClamp' && <option value="">{t('ins.type.sipClamp')}</option>}
+                    {SIP_CORE_TYPES.map((c) => (
+                      <option key={c} value={c}>
+                        {t('ins.type.sip', { cores: c })}
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td>
@@ -258,7 +305,7 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                   />
                 </td>
                 <td>
-                  <MarkSelect
+                  {coreMarkings(ins).length === 0 && <MarkSelect
                     value={ins.mark}
                     onChange={(mark) =>
                       editNode(pole.id, pole.kind, (p) => {
@@ -266,10 +313,10 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                         if (i) i.mark = mark;
                       })
                     }
-                  />
+                  />}
                 </td>
                 <td>
-                  <TraceChip trace={trace.ports.get(portKey(pole.id, ins.id))} />
+                  {coreMarkings(ins).length === 0 && <TraceChip trace={trace.ports.get(portKey(pole.id, ins.id))} />}
                 </td>
                 <td>
                   <button
@@ -287,13 +334,17 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
                   </button>
                 </td>
               </tr>
-              {/* Connections go on a second, full-width line so the table fits the sidebar. */}
-              <tr className={selectedIns === ins.id ? 'ins-conn active' : 'ins-conn'} onClick={() => focus(ins.id)}>
-                <td />
-                <td colSpan={6} className="small muted">
-                  {connections(ins.id).join('; ') || t('pole.free')}
-                </td>
-              </tr>
+              {/* Connections go on a second, full-width line so the table fits the sidebar; a cable lists its cores. */}
+              {coreMarkings(ins).length ? (
+                coreRows(ins)
+              ) : (
+                <tr className={selectedIns === ins.id ? 'ins-conn active' : 'ins-conn'} onClick={() => focus(ins.id)}>
+                  <td />
+                  <td colSpan={6} className="small muted">
+                    {connections(ins.id).join('; ') || t('pole.free')}
+                  </td>
+                </tr>
+              )}
               </Fragment>
             ))}
           </tbody>
@@ -306,11 +357,9 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
       <Section title={t('pole.jumpers')}>
         <p className="muted">{t('pole.jumpersHelp')}</p>
         {pole.jumpers.map((j) => {
-          const a = pole.insulators.find((i) => i.id === j.a);
-          const b = pole.insulators.find((i) => i.id === j.b);
           return (
             <div key={j.id} className="row">
-              {a ? insLabel(a) : '?'} ↔ {b ? insLabel(b) : '?'}
+              {portLabel(pole, j.a)} ↔ {portLabel(pole, j.b)}
               <button
                 className="icon danger"
                 onClick={() => editNode(pole.id, pole.kind, (p) => void (p.jumpers = p.jumpers.filter((x) => x.id !== j.id)))}
@@ -324,9 +373,9 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
           {[jumperA, jumperB].map((v, k) => (
             <select key={k} value={v} onChange={(e) => (k ? setJumperB : setJumperA)(e.target.value)}>
               <option value="">—</option>
-              {sorted.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {insLabel(i)}
+              {portOptions(pole).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
                 </option>
               ))}
             </select>

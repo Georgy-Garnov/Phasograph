@@ -1,6 +1,7 @@
 /** Scheme object labels in the current language: node, insulator and port names, validation message text. */
-import type { Insulator, LineKind, NodeKind, Scheme, SchemeNode, Side } from '../model/types';
+import type { Insulator, LineKind, NodeKind, PoleNode, Scheme, SchemeNode, Side } from '../model/types';
 import { insulatorLabel, isPole, sortInsulators } from '../model/scheme';
+import { polePorts, portInsulator, portMarking } from '../model/sip';
 import type { Issue } from '../topology/trace';
 import { currentLocale, t, type MessageKey } from './index';
 
@@ -15,6 +16,14 @@ function sideLetters(): Record<Side, string> {
 export function insLabel(ins: Insulator): string {
   const base = insulatorLabel(ins, sideLetters());
   return ins.type === 'sipClamp' ? `${t('ins.sipShort')} ${base}` : base;
+}
+
+/** Pole port label: "L3", or an ABC core "ABC R6·2" (clamp and core marking). */
+export function portLabel(pole: PoleNode, portId: string): string {
+  const ins = portInsulator(pole, portId);
+  if (!ins) return '?';
+  const m = portMarking(pole, portId);
+  return m ? `${insLabel(ins)}·${m}` : insLabel(ins);
 }
 
 /** Node name: house address, "Pole 0.4 kV #12", "TS "T-15"". */
@@ -39,7 +48,7 @@ export function portOptions(node: SchemeNode | undefined): PortOption[] {
       f.outputs.map((o) => ({ id: o.id, label: t('port.ktpOutput', { feeder: f.name, n: o.index, role: o.role }) })),
     );
   }
-  if (isPole(node)) return sortInsulators(node.insulators).map((i) => ({ id: i.id, label: insLabel(i) }));
+  if (isPole(node)) return polePorts(node, sortInsulators(node.insulators)).map((id) => ({ id, label: portLabel(node, id) }));
   return [];
 }
 
@@ -51,8 +60,7 @@ export function formatIssue(issue: Issue, scheme: Scheme): string {
     else if (k === 'lineKind') params[k] = lineKindLabel(v as LineKind);
     else if (k === 'ins') {
       const node = scheme.nodes[String(issue.params.node)];
-      const ins = isPole(node) ? node.insulators.find((i) => i.id === v) : undefined;
-      params[k] = ins ? insLabel(ins) : '?';
+      params[k] = isPole(node) ? portLabel(node, String(v)) : '?';
     } else params[k] = v;
   }
   return t(issue.key, params);

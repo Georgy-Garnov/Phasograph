@@ -35,13 +35,15 @@ describe('buildScene', () => {
     expect(scene.markers).toHaveLength(2);
   });
 
-  it('separate wires are parallel at any zoom, ABC is a single line', () => {
+  it('separate wires are parallel at any zoom, ABC is a sheath with its cores inside when zoomed in', () => {
     const { s, line } = state();
-    expect([...buildScene(s, new Set(), 14).features.keys()].filter((k) => k.startsWith('wire:'))).toHaveLength(5);
+    const wires = (zoom: number) => [...buildScene(s, new Set(), zoom).features.keys()].filter((k) => k.startsWith('wire:'));
+    expect(wires(14)).toHaveLength(5);
     (line as { suspension: string }).suspension = 'sip';
     const sip = buildScene(s, new Set(), 18);
-    expect(sip.features.has(`line:${line.id}`)).toBe(true);
-    expect([...sip.features.keys()].some((k) => k.startsWith('wire:'))).toBe(false);
+    expect(sip.features.get(`line:${line.id}`)!.stroke.width).toBeGreaterThan(sip.features.get(`wire:${wireKey(line.id, line.wires[0].id)}`)!.stroke.width);
+    expect(wires(18)).toHaveLength(5);
+    expect(wires(14)).toHaveLength(0);
   });
 
   it('dims other wires when highlighting', () => {
