@@ -5,7 +5,11 @@ import { DiffingAdapter, type MapEvents } from './adapter';
 import { t } from '../i18n';
 import type { FeatureSpec, FeatureTarget, MarkerSpec } from './scene';
 
-const BASE_LAYERS: Record<BaseLayer, () => L.TileLayer> = {
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const esriLayer = (service: string, attribution?: string) =>
+  L.tileLayer(`${ESRI}/${service}/MapServer/tile/{z}/{y}/{x}`, { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true, attribution });
+
+const BASE_LAYERS: Record<BaseLayer, () => L.Layer> = {
   osm: () =>
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxNativeZoom: 19,
@@ -14,13 +18,14 @@ const BASE_LAYERS: Record<BaseLayer, () => L.TileLayer> = {
       crossOrigin: true,
       attribution: `&copy; <a href="https://www.openstreetmap.org/copyright">${t('map.osmAttribution')}</a>`,
     }),
-  satellite: () =>
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxNativeZoom: 19,
-      maxZoom: 21,
-      crossOrigin: true,
-      attribution: `${t('map.esriAttribution')} &copy; Esri, Maxar, Earthstar Geographics`,
-    }),
+  satellite: () => esriLayer('World_Imagery', `${t('map.esriAttribution')} &copy; Esri, Maxar, Earthstar Geographics`),
+  // Hybrid: satellite imagery with transparent road and place-name reference layers on top.
+  hybrid: () =>
+    L.layerGroup([
+      esriLayer('World_Imagery', `${t('map.esriAttribution')} &copy; Esri, Maxar, Earthstar Geographics`),
+      esriLayer('Reference/World_Transportation'),
+      esriLayer('Reference/World_Boundaries_and_Places'),
+    ]),
 };
 
 /** Which part of the marker was clicked (the luminaire icon on a pole or the marker itself). */
@@ -44,7 +49,7 @@ interface FeatureHandle {
 /** Leaflet adapter: free OpenStreetMap and Esri satellite base layers, no key required. */
 export class LeafletAdapter extends DiffingAdapter<MarkerHandle, FeatureHandle> {
   private map: L.Map;
-  private base: L.TileLayer;
+  private base: L.Layer;
   private resizeObserver: ResizeObserver;
 
   constructor(container: HTMLElement, view: MapView, baseLayer: BaseLayer, private events: MapEvents) {

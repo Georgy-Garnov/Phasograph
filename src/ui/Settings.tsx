@@ -29,16 +29,18 @@ export function ProviderSettings() {
           <option value="yandex">{t('settings.yandexMaps')}</option>
         </select>
       </label>
-      {settings.mapProvider === 'leaflet' && (
-        <select
-          value={settings.baseLayer}
-          onChange={(e) => store.setSettings({ baseLayer: e.target.value as BaseLayer })}
-          title={t('settings.baseLayer')}
-        >
-          <option value="osm">{t('settings.layerScheme')}</option>
-          <option value="satellite">{t('settings.layerSatellite')}</option>
-        </select>
-      )}
+      {/* Yandex satellite availability is checked at runtime (see YandexAdapter). */}
+      <select
+        value={settings.baseLayer}
+        onChange={(e) => store.setSettings({ baseLayer: e.target.value as BaseLayer })}
+        title={t('settings.baseLayer')}
+      >
+        <option value="osm">{t('settings.layerScheme')}</option>
+        <option value="satellite">
+          {settings.mapProvider === 'yandex' ? t('settings.layerSatelliteYandex') : t('settings.layerSatellite')}
+        </option>
+        <option value="hybrid">{t('settings.layerHybrid')}</option>
+      </select>
       <label title={t('settings.geocoderTitle')}>
         {t('settings.geocoder')}
         <select value={settings.geocoder} onChange={(e) => store.setSettings({ geocoder: e.target.value as GeocoderProvider })}>

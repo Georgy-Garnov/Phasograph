@@ -74,9 +74,15 @@ export function MapView() {
       if (!adapter) return;
       const s = store.get();
       renderedZoom = adapter.zoom;
-      adapter.setDrawing(s.tool.type !== 'select');
-      adapter.apply(buildScene(s, focusedWires(), adapter.zoom));
-      adapter.applyPreview(buildPreview(s, cursor));
+      // A provider error while drawing must not break the whole app: show it on the map instead.
+      try {
+        adapter.setDrawing(s.tool.type !== 'select');
+        adapter.apply(buildScene(s, focusedWires(), adapter.zoom));
+        adapter.applyPreview(buildPreview(s, cursor));
+      } catch (e) {
+        console.error(e);
+        setError((e as Error).message || String(e));
+      }
     };
 
     const events: MapEvents = {
@@ -113,7 +119,7 @@ export function MapView() {
       const { view, settings } = store.get();
       adapter =
         provider === 'yandex'
-          ? new YandexAdapter(ref.current, view, events)
+          ? new YandexAdapter(ref.current, view, settings.baseLayer, events)
           : new LeafletAdapter(ref.current, view, settings.baseLayer, events);
       adapterRef.current = adapter;
       mapApi.flyTo = (c, z) => adapter?.flyTo(c, z);
@@ -151,6 +157,10 @@ export function MapView() {
   useEffect(() => {
     const a = adapterRef.current;
     if (a instanceof LeafletAdapter) a.setBaseLayer(baseLayer);
+    if (a instanceof YandexAdapter) {
+      a.setBaseLayer(baseLayer);
+      if (baseLayer === 'satellite' && !a.satelliteSupported) store.set({ hint: t('yandex.noSatellite') });
+    }
   }, [baseLayer]);
 
   return (
@@ -160,18 +170,30 @@ export function MapView() {
       {provider === 'yandex' && !apiKey && <YandexKeyForm onKey={setApiKey} />}
       {error && (
         <div className="map-error">
-          <p>{error === 'ymaps-load-failed' ? t('yandex.loadFailed') : error}</p>
-          <p className="muted small">{t('yandex.checkKey')}</p>
+          {error === 'ymaps-load-failed' ? (
+            <>
+              <p>{t('yandex.loadFailed')}</p>
+              <p className="muted small">{t('yandex.checkKey')}</p>
+            </>
+          ) : (
+            <p>{t('map.drawError', { error })}</p>
+          )}
           <div className="row">
-            <button
-              onClick={() => {
-                clearApiKey();
-                location.reload();
-              }}
-            >
-              {t('yandex.otherKey')}
-            </button>
-            <button onClick={() => store.setSettings({ mapProvider: 'leaflet' })}>{t('yandex.openOsm')}</button>
+            {error === 'ymaps-load-failed' ? (
+              <button
+                onClick={() => {
+                  clearApiKey();
+                  location.reload();
+                }}
+              >
+                {t('yandex.otherKey')}
+              </button>
+            ) : (
+              <button onClick={() => setError(null)}>{t('common.close')}</button>
+            )}
+            {provider === 'yandex' && (
+              <button onClick={() => store.setSettings({ mapProvider: 'leaflet' })}>{t('yandex.openOsm')}</button>
+            )}
           </div>
         </div>
       )}

@@ -27,7 +27,7 @@ export type Tool =
   | { type: 'line'; kind: LineKind };
 
 export type MapProvider = 'leaflet' | 'yandex';
-export type BaseLayer = 'osm' | 'satellite';
+export type BaseLayer = 'osm' | 'satellite' | 'hybrid';
 export type GeocoderProvider = 'nominatim' | 'yandex';
 export type Lang = 'ru' | 'en' | 'hy';
 export const LANGS: Lang[] = ['ru', 'en', 'hy'];
