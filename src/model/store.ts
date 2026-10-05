@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { produce, type Draft } from 'immer';
 import type { LineKind, MapView, NodeKind, Scheme, Suspension, LngLat } from './types';
-import { emptyScheme } from './scheme';
+import { centroid, emptyScheme } from './scheme';
 import { traceScheme, type TraceResult } from '../topology/trace';
 import type { LoadMode } from '../topology/voltage';
 import {
@@ -121,6 +121,26 @@ export interface AppState {
 }
 
 const HISTORY_LIMIT = 200;
+
+function leavesContourEdit(houseId: string, patch: Partial<AppState>): boolean {
+  if ('contourEdit' in patch) return false; // explicit start/finish/cancel
+  if ('selection' in patch && !(patch.selection?.type === 'node' && patch.selection.id === houseId)) return true;
+  return !!patch.tool && patch.tool.type !== 'select';
+}
+
+/** Saves the outline draft into the scheme and closes the editing mode. */
+function commitContourDraft() {
+  const edit = state.contourEdit;
+  if (!edit) return;
+  state = { ...state, contourEdit: null, contourPreview: null };
+  store.edit((d) => {
+    const h = d.nodes[edit.houseId];
+    if (h?.kind !== 'house') return;
+    if (JSON.stringify(h.contour) === JSON.stringify(edit.points)) return;
+    h.contour = edit.points;
+    h.coords = centroid(edit.points);
+  });
+}
 const SAVE_DELAY = 500;
 
 const initialScheme = emptyScheme();
@@ -227,6 +247,11 @@ export const store = {
   },
   /** UI state update (no history). */
   set(patch: Partial<AppState>) {
+    if (state.contourEdit && leavesContourEdit(state.contourEdit.houseId, patch)) {
+      // Selecting something else or switching tools while editing an outline finishes the edit (the draft is
+      // saved as one undo step) — otherwise the edit would stay open with no way back to its "Finish" button.
+      commitContourDraft();
+    }
     state = { ...state, ...patch };
     if (patch.view) scheduleSave();
     emit();

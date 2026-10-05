@@ -365,7 +365,8 @@ function collectContours(state: AppState, specs: Map<string, FeatureSpec>) {
       fill: 'rgba(0,140,255,0.12)',
       stroke: { color: 'rgba(0,0,0,0)', width: 0 },
       zIndex: 280,
-      target: null,
+      // Clicking inside the draft selects the house being edited (its card holds Finish/Cancel).
+      target: { type: 'node', id: edit.houseId },
     });
     pts.forEach((p, i) => {
       specs.set(`contour-edge:${i}`, {
