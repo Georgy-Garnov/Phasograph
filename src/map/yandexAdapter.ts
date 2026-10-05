@@ -15,9 +15,16 @@ const LABELS_ONLY = [{ elements: 'geometry', stylers: [{ visibility: 'off' }] }]
 const FEATURES_Z_INDEX = 2200;
 /**
  * Hybrid: the labels-only scheme gets its icons/labels well above the satellite layer and still below our
- * features. In plain scheme mode the default sub-layer order is used.
+ * features. By default the scheme's sub-layers are ground 1000, buildings 1100, icons 1200, labels 1300, while the
+ * satellite layer has no own z-index and takes the generic layer default of 1500 — so it covered the labels.
+ * Some API builds read the order from the deprecated `layersInfo`, others from `layers`, and a partial object is
+ * not merged with the defaults, so both are passed in full.
  */
-const HYBRID_SCHEME_LAYERS = { icons: { zIndex: FEATURES_Z_INDEX - 20 }, labels: { zIndex: FEATURES_Z_INDEX - 10 } };
+const HYBRID_Z = { ground: 1000, buildings: 1100, icons: FEATURES_Z_INDEX - 20, labels: FEATURES_Z_INDEX - 10 };
+const HYBRID_SCHEME_PROPS = {
+  layers: Object.fromEntries(Object.entries(HYBRID_Z).map(([k, zIndex]) => [k, { zIndex }])),
+  layersInfo: Object.fromEntries(Object.entries(HYBRID_Z).map(([k, zIndex]) => [k, { type: k, zIndex }])),
+};
 
 function withoutUndefined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -106,7 +113,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
     } else if (mode === 'hybrid') {
       this.scheme = new ymaps3.YMapDefaultSchemeLayer({
         customization: LABELS_ONLY,
-        layers: HYBRID_SCHEME_LAYERS,
+        ...HYBRID_SCHEME_PROPS,
       } as never) as unknown as LayerEntity;
     }
     // Added after the satellite so that, at equal z-index, the scheme (labels) is drawn on top.
