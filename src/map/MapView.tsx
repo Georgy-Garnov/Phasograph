@@ -21,6 +21,8 @@ import {
   commitContourVertex,
   previewContourEdge,
   previewContourVertex,
+  previewContourMove,
+  commitContourMove,
   toggleContourMode,
 } from './interactions';
 import { metersPerPixel } from './geo';
@@ -119,11 +121,13 @@ export function MapView() {
         if (id.startsWith('rot:')) previewPoleRotation(id.slice(4), coords);
         else if (id.startsWith('cv:')) previewContourVertex(handleIndex(id), coords, snapTolerance(coords));
         else if (id.startsWith('ce:')) previewContourEdge(handleIndex(id), coords);
+        else if (id.startsWith('cc:')) previewContourMove(coords);
       },
       markerDragEnd: (id, coords) => {
         if (id.startsWith('rot:')) rotatePoleTowards(id.slice(4), coords);
         else if (id.startsWith('cv:')) commitContourVertex(handleIndex(id), coords, snapTolerance(coords));
         else if (id.startsWith('ce:')) commitContourEdge(handleIndex(id), coords);
+        else if (id.startsWith('cc:')) commitContourMove(coords);
         else moveNode(id, coords);
       },
       featureClick: handleFeatureClick,

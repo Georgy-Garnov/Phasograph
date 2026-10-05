@@ -23,7 +23,7 @@ import { lineKindLabel, nodeKindLabel } from '../i18n/labels';
 import { highlightWires, portKey, type TraceResult } from '../topology/trace';
 import { reverseGeocode } from './geocoder';
 import type { FeatureTarget } from './scene';
-import { moveEdge, rotateContour, snapVertex } from '../model/contourEdit';
+import { moveEdge, rotateContour, snapVertex, translateContour } from '../model/contourEdit';
 
 const LINE_ENDPOINTS: Record<LineKind, { start: NodeKind[]; end: NodeKind[]; autoNode: NodeKind | null }> = {
   line10: { start: ['ktp', 'pole10'], end: ['ktp', 'pole10'], autoNode: 'pole10' },
@@ -454,6 +454,17 @@ export function commitContourVertex(index: number, coords: LngLat, toleranceM: n
   const points = [...edit.points];
   points[index] = snapVertex(edit.points, index, coords, toleranceM).point;
   store.set({ contourEdit: { ...edit, points }, contourPreview: null });
+}
+
+/** Dragging the centre handle (reshape mode) moves the whole outline. */
+export function previewContourMove(center: LngLat) {
+  const edit = store.get().contourEdit;
+  if (edit) store.set({ contourPreview: { points: translateContour(edit.points, center), green: [] } });
+}
+
+export function commitContourMove(center: LngLat) {
+  const edit = store.get().contourEdit;
+  if (edit) store.set({ contourEdit: { ...edit, points: translateContour(edit.points, center) }, contourPreview: null });
 }
 
 export function previewContourEdge(edge: number, coords: LngLat) {

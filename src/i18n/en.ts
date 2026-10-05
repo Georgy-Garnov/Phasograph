@@ -32,7 +32,7 @@ export const en: Record<keyof typeof ru, string> = {
   "conductor.group.sipMain": "ABC main line (SIP-2)",
   "contour.cancel": "Cancel",
   "contour.centerRotate": "Mode: rotate. Click to switch back to reshaping",
-  "contour.centerShape": "Mode: reshape. Click to switch to rotation",
+  "contour.centerShape": "Mode: reshape. Drag to move the whole outline; click to switch to rotation",
   "contour.edgeTitle": "Wall: drag inwards or outwards",
   "contour.edit": "Edit outline",
   "contour.editHint": "Drag the outline corners and walls. Magnet: a green wall means a right angle. Enter finishes and saves, Esc cancels.",

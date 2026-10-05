@@ -198,3 +198,11 @@ export function pointAtWall(points: LngLat[], pos: WallPosition): LngLat {
   const b = points[(pos.edge + 1) % points.length];
   return [a[0] + (b[0] - a[0]) * pos.t, a[1] + (b[1] - a[1]) * pos.t];
 }
+
+/** Moves the whole outline so that its centre lands at `center` (shape and orientation unchanged). */
+export function translateContour(points: LngLat[], center: LngLat): LngLat[] {
+  const c = contourCenter(points);
+  const dx = center[0] - c[0];
+  const dy = center[1] - c[1];
+  return points.map(([x, y]) => [x + dx, y + dy] as LngLat);
+}

@@ -92,14 +92,14 @@ function buildContourHandles(state: AppState): MarkerSpec[] {
   const edit = state.contourEdit;
   if (!edit) return [];
   const rotate = edit.mode === 'rotate';
-  // Centre handle: click toggles reshape (✥) ⇄ rotate (↻). It stays where the outline centre is.
+  // Centre handle: click toggles reshape (✥) ⇄ rotate (↻); in reshape mode dragging it moves the whole outline.
   const center: MarkerSpec = {
     id: `cc:${edit.houseId}`,
     coords: contourCenter(edit.points),
     className: rotate ? 'contour-center rotate' : 'contour-center',
     html: rotate ? '↻' : '✥',
     title: t(rotate ? 'contour.centerRotate' : 'contour.centerShape'),
-    draggable: false,
+    draggable: !rotate,
     zIndex: 41,
   };
   const corners = edit.points.map((p, i) => ({

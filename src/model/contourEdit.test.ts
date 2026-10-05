@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contourCenter, cornerAngle, edgeMidpoints, moveEdge, rotateContour, snapVertex } from './contourEdit';
+import { contourCenter, cornerAngle, edgeMidpoints, moveEdge, rotateContour, snapVertex, translateContour } from './contourEdit';
 import type { LngLat } from './types';
 
 /** Local meters → lng/lat around (37.6, 55.7). */
@@ -133,5 +133,16 @@ describe('entries follow outline edits', () => {
     const onMoved = [moved[1][0] + (moved[2][0] - moved[1][0]) * 0.4, moved[1][1] + (moved[2][1] - moved[1][1]) * 0.4];
     expect(s.nodes[onWall.id].coords[0]).toBeCloseTo(onMoved[0], 9);
     expect(s.nodes[onWall.id].coords[1]).toBeCloseTo(onMoved[1], 9);
+  });
+});
+
+describe('translateContour', () => {
+  it('moves every vertex by the same offset so the centre lands on the target', () => {
+    const rect = rotatedRect();
+    const target = m(25, -7);
+    const moved = translateContour(rect, target);
+    expect(contourCenter(moved)[0]).toBeCloseTo(target[0], 12);
+    expect(contourCenter(moved)[1]).toBeCloseTo(target[1], 12);
+    for (let i = 0; i < 4; i++) expect(cornerAngle(moved, i)).toBeCloseTo(cornerAngle(rect, i), 3);
   });
 });
