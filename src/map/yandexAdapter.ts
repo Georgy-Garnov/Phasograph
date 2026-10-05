@@ -26,6 +26,37 @@ const HYBRID_SCHEME_PROPS = {
   layersInfo: Object.fromEntries(Object.entries(HYBRID_Z).map(([k, zIndex]) => [k, { type: k, zIndex }])),
 };
 
+/** Below every scheme sub-layer (ground starts at 1000), so labels are drawn over the imagery in hybrid mode. */
+const SATELLITE_Z_INDEX = 900;
+
+/** Runtime shape of ymaps3 entities: children and props are not part of the public typings. */
+interface EntityInternals {
+  children?: readonly EntityInternals[];
+  _childContainer?: { children?: readonly EntityInternals[] };
+  _props?: { type?: string };
+  update?: (props: { zIndex: number }) => void;
+}
+
+/**
+ * YMapDefaultSatelliteLayer is a complex entity whose inner raster layer takes the generic default z-index 1500,
+ * above the scheme's labels (1300); this z-index is not exposed through public props. The inner layer entities
+ * (those with a `type`) are found at runtime and lowered — this is what makes the hybrid labels visible.
+ */
+function lowerInnerLayers(entity: unknown, zIndex: number) {
+  const seen = new Set<EntityInternals>();
+  const walk = (e: EntityInternals | undefined) => {
+    if (!e || seen.has(e)) return;
+    seen.add(e);
+    if (e !== entity && e._props?.type && typeof e.update === 'function') e.update({ zIndex });
+    [...(e.children ?? []), ...(e._childContainer?.children ?? [])].forEach(walk);
+  };
+  try {
+    walk(entity as EntityInternals);
+  } catch (err) {
+    console.warn('Could not lower the satellite layer', err);
+  }
+}
+
 function withoutUndefined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 }
@@ -107,6 +138,7 @@ export class YandexAdapter extends DiffingAdapter<{ entity: YMapMarker; el: HTML
     if (this.satellite && !this.satelliteAttached && mode !== 'osm') {
       this.map.addChild(this.satellite);
       this.satelliteAttached = true;
+      lowerInnerLayers(this.satellite, SATELLITE_Z_INDEX);
     }
     if (mode === 'osm') {
       this.scheme = new ymaps3.YMapDefaultSchemeLayer({}) as unknown as LayerEntity;
