@@ -106,6 +106,14 @@ shows the phase voltage at its entry (green within 207–253 V, ±10% by GOST 32
 for three-phase houses). The "Voltage" report tab switches between current and design loads, toggles the
 voltmeters and lists houses from the lowest voltage. cos φ = 0.95; resistances are typical values at 20 °C.
 
+**Substation (transformer).** The substation card sets the transformer rating (standard 25…2500 kVA; the type is
+shown as e.g. "TS-250/10/0,4"), the HV class (6 or 10 kV), the actual HV supply (to emulate a sag, e.g. 5500 V instead
+of 6000) and the off-circuit tap changer position (+5 / +2.5 / 0 / −2.5 / −5 % of the HV winding). The no-load 0.4 kV
+voltage is 230.9 V × (U_HV / U_HV,nom) / (1 + tap); under load the busbar voltage drops on the transformer
+short-circuit impedance (typical uk and load losses for the rating) carrying the sum of all feeder currents. Next to
+the substation a panel of the same mini displays shows busbar voltages and currents per phase, the load in kVA and %
+of the rating, the HV voltage and the HV current. HV poles and lines are labelled 6/10 kV.
+
 ## Data model
 
 `src/model/types.ts`. Nodes (Point): `ktp`, `pole10`, `pole04`, `poleService`, `entry`, `house` (optional outline).

@@ -3,6 +3,7 @@ import { createLine, createNode, emptyScheme } from '../model/scheme';
 import type { HouseNode, KtpNode, PoleNode, Role, Scheme } from '../model/types';
 import { portKey, traceScheme } from './trace';
 import { COS_PHI, computeVoltages } from './voltage';
+import { LV_NOMINAL_PHASE, noLoadPhaseVoltage, transformerImpedance, transformerData } from '../model/transformers';
 
 const SIN_PHI = Math.sqrt(1 - COS_PHI ** 2);
 
@@ -43,10 +44,11 @@ describe('voltage drop', () => {
   it('single-phase load matches the hand formula (phase + neutral)', () => {
     const { s, poles } = grid([50]);
     const h = house(s, poles[0], 'A', 5);
-    const v = computeVoltages(s, traceScheme(s), 'current').get(h.id)!;
+    const v = computeVoltages(s, traceScheme(s), 'current').houses.get(h.id)!;
     const amps = 5000 / (230 * COS_PHI);
     const drop = (km: number, r: number, x: number) => amps * 2 * km * (r * COS_PHI + x * SIN_PHI);
-    const expected = 230 - drop(0.05, 0.83, 0.31) - drop(0.02, 1.91, 0.09); // A-35 span + SIP-4 2x16 drop
+    // No transformer rating → ideal source at the no-load voltage 400/√3.
+    const expected = LV_NOMINAL_PHASE - drop(0.05, 0.83, 0.31) - drop(0.02, 1.91, 0.09); // A-35 span + SIP-4 2x16 drop
     expect(v.voltage).toBeCloseTo(expected, 1);
     expect(v.ok).toBe(true);
     expect(v.phases.map((p) => p.phase)).toEqual(['A']);
@@ -57,9 +59,9 @@ describe('voltage drop', () => {
     const single = house(one.s, one.poles[0], 'A', 5);
     const three = grid([50]);
     const balanced = house(three.s, three.poles[0], '3', 15); // 5 kW per phase
-    const v1 = computeVoltages(one.s, traceScheme(one.s), 'current').get(single.id)!;
-    const v3 = computeVoltages(three.s, traceScheme(three.s), 'current').get(balanced.id)!;
-    expect(230 - v3.voltage).toBeLessThan((230 - v1.voltage) * 0.6);
+    const v1 = computeVoltages(one.s, traceScheme(one.s), 'current').houses.get(single.id)!;
+    const v3 = computeVoltages(three.s, traceScheme(three.s), 'current').houses.get(balanced.id)!;
+    expect(LV_NOMINAL_PHASE - v3.voltage).toBeLessThan((LV_NOMINAL_PHASE - v1.voltage) * 0.6);
   });
 
   it('a downstream house sees the drop caused by upstream loads; design mode uses design power', () => {
@@ -67,9 +69,9 @@ describe('voltage drop', () => {
     const near = house(s, poles[0], 'A', 3);
     const far = house(s, poles[1], 'A', 3);
     const t = traceScheme(s);
-    const cur = computeVoltages(s, t, 'current');
+    const cur = computeVoltages(s, t, 'current').houses;
     expect(cur.get(far.id)!.voltage).toBeLessThan(cur.get(near.id)!.voltage);
-    const design = computeVoltages(s, t, 'design');
+    const design = computeVoltages(s, t, 'design').houses;
     expect(design.get(far.id)!.voltage).toBeLessThan(cur.get(far.id)!.voltage);
     expect(design.get(far.id)!.loadKw).toBe(6);
   });
@@ -78,7 +80,31 @@ describe('voltage drop', () => {
     const { s, poles } = grid([60]);
     house(s, poles[0], 'A', 10);
     const onB = house(s, poles[0], 'B', 0);
-    const v = computeVoltages(s, traceScheme(s), 'current').get(onB.id)!;
-    expect(Math.abs(v.voltage - 230)).toBeGreaterThan(1);
+    const v = computeVoltages(s, traceScheme(s), 'current').houses.get(onB.id)!;
+    expect(Math.abs(v.voltage - LV_NOMINAL_PHASE)).toBeGreaterThan(1);
+  });
+});
+
+describe('transformer', () => {
+  it('no-load voltage follows the HV supply and the tap position', () => {
+    const ktp = { hvKv: 6 as const, hvActualV: '5500', tapPct: -5 };
+    expect(noLoadPhaseVoltage(ktp)).toBeCloseTo((LV_NOMINAL_PHASE * 5500) / 6000 / 0.95, 6);
+    expect(noLoadPhaseVoltage({ hvKv: 10, hvActualV: '', tapPct: 0 })).toBeCloseTo(230.94, 2);
+    expect(noLoadPhaseVoltage({ hvKv: 10, hvActualV: '', tapPct: 5 })).toBeLessThan(LV_NOMINAL_PHASE);
+  });
+
+  it('busbar voltage drops on the transformer impedance; loading and HV current are reported', () => {
+    const { s, ktp, poles } = grid([50]);
+    ktp.powerKva = '25'; // small transformer → visible internal drop
+    house(s, poles[0], '3', 15);
+    const r = computeVoltages(s, traceScheme(s), 'current');
+    const k = r.ktps.get(ktp.id)!;
+    const amps = 5000 / (230 * COS_PHI);
+    const [rt, xt] = transformerImpedance(transformerData(ktp)!);
+    const expectedBus = LV_NOMINAL_PHASE - amps * (rt * COS_PHI + xt * SIN_PHI);
+    expect(k.voltages.A).toBeCloseTo(expectedBus, 0);
+    expect(k.currents.B).toBeCloseTo(amps, 6);
+    expect(k.loadingPct!).toBeCloseTo((k.apparentVa / 25000) * 100, 6);
+    expect(k.hvCurrent).toBeCloseTo(k.apparentVa / (Math.sqrt(3) * 10000), 6);
   });
 });

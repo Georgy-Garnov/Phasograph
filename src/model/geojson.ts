@@ -11,6 +11,7 @@
 import type { LineKind, LngLat, MapView, NodeKind, Role, Scheme, SchemeLine, SchemeNode } from './types';
 import { centroid, createNode, distanceMeters, emptyScheme, normalizeAngle } from './scheme';
 import { CONDUCTORS } from './conductors';
+import { TAP_POSITIONS } from './transformers';
 import type { TraceResult } from '../topology/trace';
 import { wireKey } from '../topology/trace';
 
@@ -214,7 +215,11 @@ function sanitizeNode(node: SchemeNode): void {
   node.note = str(node.note);
   switch (node.kind) {
     case 'ktp':
-      node.busVoltage = str(node.busVoltage);
+      node.powerKva = str(node.powerKva);
+      node.hvKv = Number(node.hvKv) === 6 ? 6 : 10;
+      node.hvActualV = str(node.hvActualV);
+      node.tapPct = TAP_POSITIONS.includes(Number(node.tapPct)) ? Number(node.tapPct) : 0;
+      delete (node as unknown as Json).busVoltage;
       node.feeders = arr<Json>(node.feeders).map((f, fi) => ({
         id: str(f.id, `f${fi + 1}`),
         name: str(f.name, `Фидер ${fi + 1}`),

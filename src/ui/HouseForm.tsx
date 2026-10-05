@@ -227,7 +227,7 @@ function HouseVoltageInfo({ houseId }: { houseId: string }) {
   const scheme = useStore((s) => s.scheme);
   const trace = useStore((s) => s.trace);
   const mode = useStore((s) => s.settings.voltageMode);
-  const v = cachedVoltages(scheme, trace, mode).get(houseId);
+  const v = cachedVoltages(scheme, trace, mode).houses.get(houseId);
   if (!v) return null;
   return (
     <div className="stats">

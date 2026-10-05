@@ -496,3 +496,42 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 /* Report tabs: keep on one line and scroll horizontally when they do not fit. */
 .report .tabs { overflow-x: auto; scrollbar-width: thin; }
 .report .tabs button { flex: none; white-space: nowrap; padding: 8px 10px; }
+
+/* ---- Substation instrument panel ---- */
+.node .ktp-panel {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 4px;
+  background: #e9edf1;
+  border: 1px solid #9aa3ad;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.node .ktp-row { display: flex; align-items: center; gap: 2px; }
+.node .ktp-row b { width: 40px; font: 700 8px/1 system-ui, sans-serif; color: #2b3036; }
+.node .ktp-row .lcd {
+  font: 700 10px/12px 'Courier New', ui-monospace, monospace;
+  font-style: normal;
+  min-width: 26px;
+  padding: 0 2px;
+  text-align: right;
+  color: #39ff6a;
+  background: #101418;
+  border: 1px solid #2b3036;
+  border-radius: 2px;
+}
+.node .ktp-row .lcd.bad { color: #ff4d4d; }
+.node .ktp-row .lcd.ph-A { border-top: 2px solid #f2c200; }
+.node .ktp-row .lcd.ph-B { border-top: 2px solid #1f9d3a; }
+.node .ktp-row .lcd.ph-C { border-top: 2px solid #d62828; }
+.ktp-readings { display: grid; gap: 2px; font-size: 12px; margin-top: 6px; }
+.tap-seg button { padding: 4px 6px; font-size: 12px; }
+.ktp-summary { cursor: pointer; background: #f3f6f9; border-radius: 6px; padding: 4px 6px; }

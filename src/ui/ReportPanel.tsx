@@ -7,6 +7,7 @@ import { lampStatusLabel } from './LampsSection';
 import { currentLocale, useT, type MessageKey } from '../i18n';
 import { formatIssue } from '../i18n/labels';
 import { COS_PHI, VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type LoadMode } from '../topology/voltage';
+import { transformerType } from '../model/transformers';
 import { isPole } from '../model/scheme';
 import { statusLabel } from './HouseForm';
 
@@ -223,7 +224,8 @@ function VoltageReport() {
   const scheme = useStore((s) => s.scheme);
   const trace = useStore((s) => s.trace);
   const settings = useStore((s) => s.settings);
-  const voltages = cachedVoltages(scheme, trace, settings.voltageMode);
+  const calc = cachedVoltages(scheme, trace, settings.voltageMode);
+  const voltages = calc.houses;
   const houses = Object.values(scheme.nodes).filter((n): n is HouseNode => n.kind === 'house');
   const rows = houses
     .filter((h) => voltages.has(h.id))
@@ -252,6 +254,25 @@ function VoltageReport() {
         </label>
       </div>
       <p className="muted small">{t('voltage.help', { cos: COS_PHI, min: VOLTAGE_MIN, max: VOLTAGE_MAX })}</p>
+      {[...calc.ktps].map(([id, k]) => {
+        const node = scheme.nodes[id];
+        if (node?.kind !== 'ktp') return null;
+        return (
+          <div key={id} className="stats ktp-summary" onClick={() => select(id)}>
+            <b>{node.name || transformerType(node, t('node.ktp'))}</b>
+            <span>
+              {t('ktp.loading')}: {(k.apparentVa / 1000).toFixed(1)} {t('unit.kva')}
+              {k.loadingPct !== null && <b className={k.loadingPct > 100 ? 'status-conflict' : ''}> ({k.loadingPct.toFixed(0)}%)</b>}
+            </span>
+            <span>
+              {t('ktp.busbars')}: {(['A', 'B', 'C'] as const).map((p) => k.voltages[p].toFixed(0)).join(' / ')} {t('unit.v')}
+            </span>
+            <span>
+              {t('ktp.hvReading')}: {(k.hvVoltage / 1000).toFixed(2)} {t('unit.kv')}
+            </span>
+          </div>
+        );
+      })}
       <div className="stats">
         <span>
           {t('voltage.computed')}: <b>{rows.length}</b> / {houses.length}

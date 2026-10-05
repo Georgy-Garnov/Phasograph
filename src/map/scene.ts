@@ -8,7 +8,7 @@ import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS 
 import { bearing, destination, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
-import { cachedVoltages, type HouseVoltage } from '../topology/voltage';
+import { VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type HouseVoltage, type KtpReading } from '../topology/voltage';
 import { t } from '../i18n';
 
 /** Below this zoom parallel wires are drawn closer together. */
@@ -140,9 +140,36 @@ function voltmeter(v: HouseVoltage): string {
   return `<span class="voltmeter${v.ok ? '' : ' bad'}" title="${escapeHtml(title)}">${Math.round(v.voltage)}</span>`;
 }
 
+const lcd = (text: string, bad = false, phase?: string) =>
+  `<i class="lcd${bad ? ' bad' : ''}${phase ? ` ph-${phase}` : ''}">${escapeHtml(text)}</i>`;
+const num = (v: number, digits: number) => v.toFixed(digits);
+
+/**
+ * Substation instrument panel: busbar voltages and currents per phase, transformer load (kVA, %),
+ * HV voltage (kV) and HV current (A) — the same mini digital displays as the house voltmeters.
+ */
+function ktpPanel(r: KtpReading): string {
+  const ph = ['A', 'B', 'C'] as const;
+  const amps = (a: number) => num(a, a < 10 ? 1 : 0);
+  const row = (label: string, title: string, cells: string) =>
+    `<span class="ktp-row" title="${escapeHtml(title)}"><b>${escapeHtml(label)}</b>${cells}</span>`;
+  const overload = r.loadingPct !== null && r.loadingPct > 100;
+  return `<span class="ktp-panel">${[
+    row(t('scene.ktpU'), t('ktp.busbars'), ph.map((p) => lcd(num(r.voltages[p], 0), r.voltages[p] < VOLTAGE_MIN || r.voltages[p] > VOLTAGE_MAX, p)).join('')),
+    row(t('scene.ktpI'), t('ktp.currents'), ph.map((p) => lcd(amps(r.currents[p]), false, p)).join('')),
+    row(
+      t('scene.ktpS'),
+      t('ktp.loading'),
+      lcd(num(r.apparentVa / 1000, 1)) + (r.loadingPct !== null ? lcd(`${num(r.loadingPct, 0)}%`, overload) : ''),
+    ),
+    row(t('scene.ktpHv'), t('ktp.hvReading'), lcd(num(r.hvVoltage / 1000, 2)) + lcd(num(r.hvCurrent, 1))),
+  ].join('')}</span>`;
+}
+
 function buildMarkers(state: AppState): MarkerSpec[] {
   const { scheme, selection, lineStart, tool, trace } = state;
-  const voltages = state.settings?.showVoltage ? cachedVoltages(scheme, trace, state.settings.voltageMode) : null;
+  const calc = state.settings?.showVoltage ? cachedVoltages(scheme, trace, state.settings.voltageMode) : null;
+  const voltages = calc?.houses ?? null;
   const photoCounts = new Map<string, number>();
   for (const p of state.photos ?? []) photoCounts.set(p.nodeId, (photoCounts.get(p.nodeId) ?? 0) + 1);
   return Object.values(scheme.nodes).map((node) => {
@@ -165,6 +192,10 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       if (v) voltmeterHtml = voltmeter(v);
     }
     if (isPole(node) && node.number) badge = node.number;
+    if (node.kind === 'ktp') {
+      const reading = calc?.ktps.get(node.id);
+      if (reading) voltmeterHtml = ktpPanel(reading);
+    }
     let lampHtml = '';
     if (isPole(node) && node.lamps.length) {
       const off = node.lamps.some((l) => trace.lamps.get(l.id)?.status !== 'ok');

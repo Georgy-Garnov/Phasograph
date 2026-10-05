@@ -36,11 +36,19 @@ export interface Feeder {
   outputs: KtpOutput[];
 }
 
+/** Nominal high voltage of distribution transformers and HV lines/poles, kV. */
+export type HvKv = 6 | 10;
+
 export interface KtpNode extends NodeBase {
   kind: 'ktp';
+  /** Transformer rating, kVA (one of the standard values, see TRANSFORMER_RATINGS; empty = unknown). */
   powerKva: string;
-  /** Phase-to-neutral voltage on the 0.4 kV busbars, V (string as typed; empty = 230). */
-  busVoltage: string;
+  /** Nominal high voltage of the transformer, kV. */
+  hvKv: HvKv;
+  /** Actual high-voltage supply, V (string as typed; empty = nominal) — to emulate HV sags. */
+  hvActualV: string;
+  /** Off-circuit tap changer position, % of the HV winding: -5, -2.5, 0, +2.5, +5. */
+  tapPct: number;
   feeders: Feeder[];
 }
 

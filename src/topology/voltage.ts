@@ -1,6 +1,10 @@
 /**
  * Voltage-drop calculation for 0.4 kV radial feeders with unbalanced single-phase loads.
  *
+ * The busbar voltage comes from the transformer: no-load voltage set by the actual HV supply and the
+ * off-circuit tap position, minus the drop on the transformer short-circuit impedance caused by the sum of
+ * all feeder currents.
+ *
  * For every feeder a tree is built from the substation over the lines that carry this feeder (by tracing).
  * Each house load is placed on its phase (three-phase houses are split equally over A, B, C) as a current
  * phasor I = P / (U_nom · cos φ) lagging its phase voltage by φ. Branch currents are summed towards the
@@ -11,6 +15,7 @@ import type { HouseNode, Phase, Scheme, SchemeLine } from '../model/types';
 import { conductorOf } from '../model/conductors';
 import { wireKey, type TraceResult } from './trace';
 import { lineLength } from './distances';
+import { hvActualV, noLoadPhaseVoltage, transformerData, transformerImpedance } from '../model/transformers';
 
 export const NOMINAL_VOLTAGE = 230;
 export const COS_PHI = 0.95;
@@ -61,8 +66,39 @@ function carriesFeeder(line: SchemeLine, feederId: string, trace: TraceResult): 
   return line.wires.some((w) => trace.wires.get(wireKey(line.id, w.id))?.feeders.includes(feederId));
 }
 
-export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): Map<string, HouseVoltage> {
-  const result = new Map<string, HouseVoltage>();
+/** Instrument readings of a substation (transformer) for the current load. */
+export interface KtpReading {
+  /** Busbar phase voltages A, B, C, V. */
+  voltages: Record<Phase, number>;
+  /** Phase currents A, B, C, A. */
+  currents: Record<Phase, number>;
+  /** Apparent power drawn from the transformer, VA. */
+  apparentVa: number;
+  /** Loading relative to the rated power, % (null when the rating is unknown). */
+  loadingPct: number | null;
+  /** Actual high voltage, V. */
+  hvVoltage: number;
+  /** High-voltage line current, A. */
+  hvCurrent: number;
+  /** No-load LV phase voltage set by the HV supply and the tap position, V. */
+  noLoadVoltage: number;
+}
+
+export interface VoltageResult {
+  houses: Map<string, HouseVoltage>;
+  ktps: Map<string, KtpReading>;
+}
+
+interface FeederTree {
+  order: string[];
+  parent: Map<string, { node: string; line: SchemeLine }>;
+  branch: Map<string, Triple>;
+  houses: { house: HouseNode; at: string; phases: Phase[]; kw: number }[];
+}
+
+export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): VoltageResult {
+  const houses = new Map<string, HouseVoltage>();
+  const ktps = new Map<string, KtpReading>();
   const phiDeg = (Math.acos(COS_PHI) * 180) / Math.PI;
 
   // Service entry → house, to attach houses fed through an entry point.
@@ -73,15 +109,15 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
 
   for (const ktp of Object.values(scheme.nodes)) {
     if (ktp.kind !== 'ktp') continue;
-    const u0 = parseKw(ktp.busVoltage) || NOMINAL_VOLTAGE;
 
+    // 1. Feeder trees and branch currents (loads are currents at nominal voltage, so no iteration needed).
+    const trees: FeederTree[] = [];
     for (const feeder of ktp.feeders) {
       const lines = Object.values(scheme.lines).filter(
         (l) => (l.kind === 'line04' || l.kind === 'drop') && carriesFeeder(l, feeder.id, trace),
       );
       if (!lines.length) continue;
 
-      // Tree from the substation (BFS by length; spans are short, any spanning tree of a radial net is the net).
       const adj = new Map<string, { to: string; line: SchemeLine }[]>();
       for (const l of lines) {
         adj.set(l.from, [...(adj.get(l.from) ?? []), { to: l.to, line: l }]);
@@ -99,9 +135,8 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         }
       }
 
-      // House loads on the tree node they are fed at.
       const loads = new Map<string, Triple>();
-      const housesHere: { house: HouseNode; at: string; phases: Phase[]; kw: number }[] = [];
+      const feederHouses: FeederTree['houses'] = [];
       for (const house of Object.values(scheme.nodes)) {
         if (house.kind !== 'house') continue;
         const ht = trace.houses.get(house.id);
@@ -111,7 +146,7 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         const phases = house.phaseMode === '3' ? PHASES : ht.effectivePhases.slice(0, 1);
         if (!phases.length) continue;
         const kw = houseLoadKw(house, mode);
-        housesHere.push({ house, at, phases, kw });
+        feederHouses.push({ house, at, phases, kw });
         const t = loads.get(at) ?? zeroTriple();
         for (const p of phases) {
           const amps = (kw * 1000) / phases.length / (NOMINAL_VOLTAGE * COS_PHI);
@@ -120,20 +155,43 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         loads.set(at, t);
       }
 
-      // Branch currents: accumulate from the leaves towards the substation.
       const branch = new Map<string, Triple>();
       for (const id of order) branch.set(id, { ...(loads.get(id) ?? zeroTriple()) });
       for (let i = order.length - 1; i > 0; i--) {
-        const id = order[i];
-        const up = parent.get(id)!.node;
-        const t = branch.get(id)!;
-        const u = branch.get(up)!;
+        const t = branch.get(order[i])!;
+        const u = branch.get(parent.get(order[i])!.node)!;
         for (const p of PHASES) u[p] = add(u[p], t[p]);
       }
+      trees.push({ order, parent, branch, houses: feederHouses });
+    }
 
-      // Voltages: walk from the substation downwards.
-      const volts = new Map<string, Triple>();
-      volts.set(ktp.id, { A: polar(u0, 0), B: polar(u0, -120), C: polar(u0, 120) });
+    // 2. Transformer: total current of all feeders, busbar voltage behind the short-circuit impedance.
+    const iBus = zeroTriple();
+    for (const tree of trees) for (const p of PHASES) iBus[p] = add(iBus[p], tree.branch.get(ktp.id)![p]);
+    const u0 = noLoadPhaseVoltage(ktp);
+    const data = transformerData(ktp);
+    const zT: C = data ? transformerImpedance(data) : ZERO;
+    const bus: Triple = { A: ZERO, B: ZERO, C: ZERO };
+    for (const p of PHASES) bus[p] = sub(polar(u0, PHASE_ANGLE[p]), mul(zT, iBus[p]));
+
+    const voltages = { A: abs(bus.A), B: abs(bus.B), C: abs(bus.C) };
+    const currents = { A: abs(iBus.A), B: abs(iBus.B), C: abs(iBus.C) };
+    const apparentVa = PHASES.reduce((sum, p) => sum + voltages[p] * currents[p], 0);
+    const hvVoltage = hvActualV(ktp);
+    ktps.set(ktp.id, {
+      voltages,
+      currents,
+      apparentVa,
+      loadingPct: data ? (apparentVa / (data.kva * 1000)) * 100 : null,
+      hvVoltage,
+      // Losses are neglected: the HV side delivers the same apparent power.
+      hvCurrent: apparentVa / (Math.sqrt(3) * hvVoltage),
+      noLoadVoltage: u0,
+    });
+
+    // 3. Feeders: walk from the busbars downwards.
+    for (const { order, parent, branch, houses: feederHouses } of trees) {
+      const volts = new Map<string, Triple>([[ktp.id, bus]]);
       for (let i = 1; i < order.length; i++) {
         const id = order[i];
         const { node: up, line } = parent.get(id)!;
@@ -149,11 +207,11 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         volts.set(id, v);
       }
 
-      for (const { house, at, phases, kw } of housesHere) {
+      for (const { house, at, phases, kw } of feederHouses) {
         const v = volts.get(at)!;
         const perPhase = phases.map((p) => ({ phase: p, voltage: abs(v[p]) }));
         const voltage = Math.min(...perPhase.map((x) => x.voltage));
-        result.set(house.id, {
+        houses.set(house.id, {
           phases: perPhase,
           voltage,
           dropPct: ((u0 - voltage) / NOMINAL_VOLTAGE) * 100,
@@ -163,13 +221,13 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
       }
     }
   }
-  return result;
+  return { houses, ktps };
 }
 
-const cache = new WeakMap<TraceResult, Partial<Record<LoadMode, Map<string, HouseVoltage>>>>();
+const cache = new WeakMap<TraceResult, Partial<Record<LoadMode, VoltageResult>>>();
 
 /** Cached per trace result (a new trace is produced on every scheme change). */
-export function cachedVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): Map<string, HouseVoltage> {
+export function cachedVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): VoltageResult {
   let entry = cache.get(trace);
   if (!entry) cache.set(trace, (entry = {}));
   return (entry[mode] ??= computeVoltages(scheme, trace, mode));
