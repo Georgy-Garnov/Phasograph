@@ -21,6 +21,7 @@ import {
   commitContourVertex,
   previewContourEdge,
   previewContourVertex,
+  toggleContourMode,
 } from './interactions';
 import { metersPerPixel } from './geo';
 
@@ -111,7 +112,8 @@ export function MapView() {
       },
       viewChange: (view) => store.set({ view }),
       markerClick: (id, part) => {
-        if (!/^(rot|orient|cv|ce):/.test(id)) handleNodeClick(id, part);
+        if (id.startsWith('cc:')) toggleContourMode();
+        else if (!/^(rot|orient|cv|ce):/.test(id)) handleNodeClick(id, part);
       },
       markerDrag: (id, coords) => {
         if (id.startsWith('rot:')) previewPoleRotation(id.slice(4), coords);

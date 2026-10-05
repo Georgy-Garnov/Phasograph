@@ -563,3 +563,20 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
   touch-action: none;
 }
 .contour-edit-buttons { flex-wrap: wrap; margin: 6px 0; }
+.contour-center {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #008cff;
+  color: #008cff;
+  font: 700 16px/22px system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  user-select: none;
+}
+.contour-center.rotate { background: #ff9800; border-color: #e65100; color: #fff; }
+.contour-vertex.rotate { border-color: #ff9800; cursor: grab; }

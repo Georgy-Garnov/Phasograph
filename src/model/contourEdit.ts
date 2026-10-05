@@ -142,3 +142,59 @@ export function cornerAngle(points: LngLat[], index: number): number {
   const b = sub(pl.to(points[(index + 1) % n]), pl.to(points[index]));
   return (Math.acos(Math.max(-1, Math.min(1, dot(a, b) / (len(a) * len(b))))) * 180) / Math.PI;
 }
+
+/** Average of the outline vertices: the fixed centre of rotation. */
+export function contourCenter(points: LngLat[]): LngLat {
+  const s = points.reduce<[number, number]>((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0]);
+  return [s[0] / points.length, s[1] / points.length];
+}
+
+/**
+ * Rotates the whole outline around its centre by the angle between the grabbed corner and the pointer,
+ * as seen from the centre; the centre stays in place and every vertex turns by the same angle.
+ */
+export function rotateContour(points: LngLat[], grabbed: number, pointer: LngLat): LngLat[] {
+  const center = contourCenter(points);
+  const pl = plane(center);
+  const from = pl.to(points[grabbed]);
+  const to = pl.to(pointer);
+  if (len(from) < 1e-9 || len(to) < 1e-9) return points;
+  const angle = Math.atan2(to[1], to[0]) - Math.atan2(from[1], from[0]);
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return points.map((p) => {
+    const [x, y] = pl.to(p);
+    return pl.from([x * c - y * s, x * s + y * c]);
+  });
+}
+
+export interface WallPosition {
+  edge: number;
+  /** 0…1 along the edge from points[edge] to points[edge + 1]. */
+  t: number;
+}
+
+/** Where on the outline a point lies: the nearest wall and the fraction along it, if within `maxDist` meters. */
+export function wallPosition(points: LngLat[], p: LngLat, maxDist: number): WallPosition | null {
+  const pl = plane(p);
+  const v: V = [0, 0];
+  let best: (WallPosition & { dist: number }) | null = null;
+  points.forEach((a, i) => {
+    const A = pl.to(a);
+    const B = pl.to(points[(i + 1) % points.length]);
+    const ab = sub(B, A);
+    const l2 = dot(ab, ab);
+    const t = l2 > 0 ? Math.max(0, Math.min(1, dot(sub(v, A), ab) / l2)) : 0;
+    const dist = len(sub(add(A, mul(ab, t)), v));
+    if (!best || dist < best.dist) best = { edge: i, t, dist };
+  });
+  const found = best as (WallPosition & { dist: number }) | null;
+  return found && found.dist <= maxDist ? { edge: found.edge, t: found.t } : null;
+}
+
+/** The point at a wall position of an outline (same vertex count as the one it was measured on). */
+export function pointAtWall(points: LngLat[], pos: WallPosition): LngLat {
+  const a = points[pos.edge % points.length];
+  const b = points[(pos.edge + 1) % points.length];
+  return [a[0] + (b[0] - a[0]) * pos.t, a[1] + (b[1] - a[1]) * pos.t];
+}

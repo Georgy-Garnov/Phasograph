@@ -18,6 +18,7 @@ import type {
   Wire,
 } from './types';
 import { WIRED_LINE_KINDS } from './constants';
+import { pointAtWall, wallPosition } from './contourEdit';
 
 let counter = 0;
 export function uid(prefix: string): string {
@@ -563,4 +564,33 @@ export function routeLines(scheme: Scheme, lineId: string, feedersOf?: (line: Sc
     }
   }
   return [...found];
+}
+
+// ---------- House outline changes ----------
+
+/** Entries of a house lying on its outline within this distance (meters) follow outline edits. */
+export const ENTRY_ON_WALL_M = 3;
+
+/**
+ * New positions of the house's service entries when its outline changes from `before` to `after` (same vertex
+ * count): each entry on a wall keeps its wall and fraction along it, so drops follow the moved wall.
+ */
+export function entriesOnNewContour(scheme: Scheme, houseId: string, before: LngLat[], after: LngLat[]): Map<string, LngLat> {
+  const moved = new Map<string, LngLat>();
+  if (before.length !== after.length) return moved;
+  for (const n of Object.values(scheme.nodes)) {
+    if (n.kind !== 'entry' || n.houseId !== houseId) continue;
+    const pos = wallPosition(before, n.coords, ENTRY_ON_WALL_M);
+    if (pos) moved.set(n.id, pointAtWall(after, pos));
+  }
+  return moved;
+}
+
+/** Applies a new outline to a house: outline, centre point and the entries on its walls. */
+export function applyHouseContour(scheme: Scheme, houseId: string, points: LngLat[]): void {
+  const h = scheme.nodes[houseId];
+  if (h?.kind !== 'house' || !h.contour) return;
+  for (const [id, coords] of entriesOnNewContour(scheme, houseId, h.contour, points)) scheme.nodes[id].coords = coords;
+  h.contour = points;
+  h.coords = centroid(points);
 }

@@ -2,6 +2,7 @@
 import { store, type Tool } from '../model/store';
 import {
   addLamp,
+  applyHouseContour,
   bearing,
   normalizeAngle,
   centroid,
@@ -22,7 +23,7 @@ import { lineKindLabel, nodeKindLabel } from '../i18n/labels';
 import { highlightWires, portKey, type TraceResult } from '../topology/trace';
 import { reverseGeocode } from './geocoder';
 import type { FeatureTarget } from './scene';
-import { moveEdge, snapVertex } from '../model/contourEdit';
+import { moveEdge, rotateContour, snapVertex } from '../model/contourEdit';
 
 const LINE_ENDPOINTS: Record<LineKind, { start: NodeKind[]; end: NodeKind[]; autoNode: NodeKind | null }> = {
   line10: { start: ['ktp', 'pole10'], end: ['ktp', 'pole10'], autoNode: 'pole10' },
@@ -331,9 +332,10 @@ export function moveNode(id: string, coords: LngLat) {
     const n = d.nodes[id];
     if (!n) return;
     if (n.kind === 'house' && n.contour) {
+      // Moving the house shifts its outline, and the entries on its walls move with it.
       const dx = coords[0] - n.coords[0];
       const dy = coords[1] - n.coords[1];
-      n.contour = n.contour.map(([x, y]) => [x + dx, y + dy]);
+      applyHouseContour(d, id, n.contour.map(([x, y]) => [x + dx, y + dy] as LngLat));
     }
     n.coords = coords;
     if (n.kind === 'entry') attachEntry(d, n);
@@ -423,9 +425,19 @@ export function startContourEdit(houseId: string) {
   });
 }
 
+/** Toggles the centre handle mode: reshape ⇄ rotate. */
+export function toggleContourMode() {
+  const edit = store.get().contourEdit;
+  if (edit) store.set({ contourEdit: { ...edit, mode: edit.mode === 'rotate' ? 'shape' : 'rotate' } });
+}
+
 export function previewContourVertex(index: number, coords: LngLat, toleranceM: number) {
   const edit = store.get().contourEdit;
   if (!edit) return;
+  if (edit.mode === 'rotate') {
+    store.set({ contourPreview: { points: rotateContour(edit.points, index, coords), green: [] } });
+    return;
+  }
   const snap = snapVertex(edit.points, index, coords, toleranceM);
   const points = [...edit.points];
   points[index] = snap.point;
@@ -435,6 +447,10 @@ export function previewContourVertex(index: number, coords: LngLat, toleranceM: 
 export function commitContourVertex(index: number, coords: LngLat, toleranceM: number) {
   const edit = store.get().contourEdit;
   if (!edit) return;
+  if (edit.mode === 'rotate') {
+    store.set({ contourEdit: { ...edit, points: rotateContour(edit.points, index, coords) }, contourPreview: null });
+    return;
+  }
   const points = [...edit.points];
   points[index] = snapVertex(edit.points, index, coords, toleranceM).point;
   store.set({ contourEdit: { ...edit, points }, contourPreview: null });
@@ -455,12 +471,7 @@ export function finishContourEdit() {
   const edit = store.get().contourEdit;
   if (!edit) return;
   store.edit(
-    (d) => {
-      const h = d.nodes[edit.houseId];
-      if (h?.kind !== 'house') return;
-      h.contour = edit.points;
-      h.coords = centroid(edit.points);
-    },
+    (d) => applyHouseContour(d, edit.houseId, edit.points),
     { patch: { contourEdit: null, contourPreview: null, hint: t('contour.saved') } },
   );
 }

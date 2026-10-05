@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { produce, type Draft } from 'immer';
 import type { LineKind, MapView, NodeKind, Scheme, Suspension, LngLat } from './types';
-import { centroid, emptyScheme } from './scheme';
+import { applyHouseContour, emptyScheme } from './scheme';
 import { traceScheme, type TraceResult } from '../topology/trace';
 import type { LoadMode } from '../topology/voltage';
 import {
@@ -71,6 +71,9 @@ function loadSettings(): Settings {
   }
 }
 
+/** Outline editing mode: reshape (corners with the magnet, walls) or rotate around the centre. */
+export type ContourEditMode = 'shape' | 'rotate';
+
 export type Selection =
   | { type: 'node'; id: string }
   | { type: 'line'; id: string }
@@ -107,7 +110,7 @@ export interface AppState {
   /** Terminal from which the conductor is highlighted. */
   focusKey: string | null;
   /** House outline being edited: a draft, saved to the scheme only on "Finish editing". */
-  contourEdit: { houseId: string; points: LngLat[] } | null;
+  contourEdit: { houseId: string; points: LngLat[]; mode?: ContourEditMode } | null;
   /** Live outline while a vertex or wall handle is dragged, with edges highlighted by the right-angle magnet. */
   contourPreview: { points: LngLat[]; green: number[] } | null;
   /** Live azimuth while the pole rotation handle is being dragged (not in undo history until dropped). */
@@ -135,10 +138,8 @@ function commitContourDraft() {
   state = { ...state, contourEdit: null, contourPreview: null };
   store.edit((d) => {
     const h = d.nodes[edit.houseId];
-    if (h?.kind !== 'house') return;
-    if (JSON.stringify(h.contour) === JSON.stringify(edit.points)) return;
-    h.contour = edit.points;
-    h.coords = centroid(edit.points);
+    if (h?.kind !== 'house' || JSON.stringify(h.contour) === JSON.stringify(edit.points)) return;
+    applyHouseContour(d, edit.houseId, edit.points);
   });
 }
 const SAVE_DELAY = 500;

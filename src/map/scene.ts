@@ -5,10 +5,10 @@
 import type { AppState } from '../model/store';
 import type { Scheme, LngLat, SchemeLine, SchemeNode, Wire } from '../model/types';
 import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS } from '../model/constants';
-import { bearing, destination, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
+import { bearing, destination, entriesOnNewContour, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
-import { edgeMidpoints } from '../model/contourEdit';
+import { contourCenter, edgeMidpoints } from '../model/contourEdit';
 import { VOLTAGE_MAX, VOLTAGE_MIN, cachedVoltages, type HouseVoltage, type KtpReading } from '../topology/voltage';
 import { t } from '../i18n';
 
@@ -64,9 +64,24 @@ const NODE_ICONS: Partial<Record<SchemeNode['kind'], string>> = {
 
 export function buildScene(state: AppState, highlighted: Set<string>, zoom: number): Scene {
   const features = new Map<string, FeatureSpec>();
-  collectLines(state, highlighted, zoom, features);
+  const moved = draftEntryPositions(state);
+  collectLines(state, highlighted, zoom, features, moved);
   collectContours(state, features);
-  return { markers: [...buildMarkers(state), ...buildOrientation(state, zoom), ...buildContourHandles(state)], features };
+  return {
+    markers: [...buildMarkers(state, moved), ...buildOrientation(state, zoom), ...buildContourHandles(state)],
+    features,
+  };
+}
+
+/**
+ * While an outline is being edited, the house's entries on its walls follow the draft (and their drops are drawn
+ * to the new positions) before the draft is saved.
+ */
+function draftEntryPositions(state: AppState): Map<string, LngLat> {
+  const edit = state.contourEdit;
+  const house = edit ? state.scheme.nodes[edit.houseId] : undefined;
+  if (!edit || house?.kind !== 'house' || !house.contour) return new Map();
+  return entriesOnNewContour(state.scheme, edit.houseId, house.contour, state.contourPreview?.points ?? edit.points);
 }
 
 /**
@@ -76,15 +91,27 @@ export function buildScene(state: AppState, highlighted: Set<string>, zoom: numb
 function buildContourHandles(state: AppState): MarkerSpec[] {
   const edit = state.contourEdit;
   if (!edit) return [];
+  const rotate = edit.mode === 'rotate';
+  // Centre handle: click toggles reshape (✥) ⇄ rotate (↻). It stays where the outline centre is.
+  const center: MarkerSpec = {
+    id: `cc:${edit.houseId}`,
+    coords: contourCenter(edit.points),
+    className: rotate ? 'contour-center rotate' : 'contour-center',
+    html: rotate ? '↻' : '✥',
+    title: t(rotate ? 'contour.centerRotate' : 'contour.centerShape'),
+    draggable: false,
+    zIndex: 41,
+  };
   const corners = edit.points.map((p, i) => ({
     id: `cv:${edit.houseId}:${i}`,
     coords: p,
-    className: 'contour-vertex',
+    className: rotate ? 'contour-vertex rotate' : 'contour-vertex',
     html: '',
-    title: t('contour.vertexTitle'),
+    title: t(rotate ? 'contour.vertexRotateTitle' : 'contour.vertexTitle'),
     draggable: true,
     zIndex: 40,
   }));
+  if (rotate) return [center, ...corners];
   const walls = edgeMidpoints(edit.points).map((p, i) => ({
     id: `ce:${edit.houseId}:${i}`,
     coords: p,
@@ -94,7 +121,7 @@ function buildContourHandles(state: AppState): MarkerSpec[] {
     draggable: true,
     zIndex: 39,
   }));
-  return [...corners, ...walls];
+  return [center, ...corners, ...walls];
 }
 
 /** Distance of the rotation handle from the pole, in screen pixels. */
@@ -195,7 +222,7 @@ function ktpPanel(r: KtpReading): string {
   ].join('')}</span>`;
 }
 
-function buildMarkers(state: AppState): MarkerSpec[] {
+function buildMarkers(state: AppState, moved: Map<string, LngLat>): MarkerSpec[] {
   const { scheme, selection, lineStart, tool, trace } = state;
   const calc = state.settings?.showVoltage ? cachedVoltages(scheme, trace, state.settings.voltageMode) : null;
   const voltages = calc?.houses ?? null;
@@ -239,7 +266,7 @@ function buildMarkers(state: AppState): MarkerSpec[] {
       : '';
     return {
       id: node.id,
-      coords: node.coords,
+      coords: moved.get(node.id) ?? node.coords,
       className: classes.join(' '),
       html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}${voltmeterHtml}`,
       title: node.kind === 'house' ? node.address || node.name : node.name,
@@ -249,12 +276,23 @@ function buildMarkers(state: AppState): MarkerSpec[] {
   });
 }
 
-function collectLines(state: AppState, highlighted: Set<string>, zoom: number, specs: Map<string, FeatureSpec>) {
+function collectLines(
+  state: AppState,
+  highlighted: Set<string>,
+  zoom: number,
+  specs: Map<string, FeatureSpec>,
+  moved: Map<string, LngLat>,
+) {
   const { scheme, selection, trace } = state;
   const dim = highlighted.size > 0;
+  const at = (id: string) => {
+    const n = scheme.nodes[id];
+    const c = moved.get(id);
+    return n && c ? { ...n, coords: c } : n;
+  };
   for (const line of Object.values(scheme.lines)) {
-    const a = scheme.nodes[line.from];
-    const b = scheme.nodes[line.to];
+    const a = at(line.from);
+    const b = at(line.to);
     if (!a || !b) continue;
     const base = LINE_STYLES[line.kind];
     const selected = selection?.type === 'line' && selection.id === line.id;
