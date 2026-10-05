@@ -303,9 +303,13 @@ function VoltageReport() {
             <tr key={h.id} className={v.ok ? '' : 'bad-row'} onClick={() => select(h.id)}>
               <td>{nodeName(h)}</td>
               <td>{v.phases.map((p) => p.phase).join('')}</td>
-              <td>{v.loadKw.toLocaleString(currentLocale(), { maximumFractionDigits: 1 })}</td>
               <td>
-                <b>{v.voltage.toFixed(1)}</b>
+                {v.phases.length > 1
+                  ? v.phases.map((p) => p.loadKw.toLocaleString(currentLocale(), { maximumFractionDigits: 1 })).join(' / ')
+                  : v.loadKw.toLocaleString(currentLocale(), { maximumFractionDigits: 1 })}
+              </td>
+              <td>
+                {v.phases.length > 1 ? v.phases.map((p) => p.voltage.toFixed(0)).join(' / ') : <b>{v.voltage.toFixed(1)}</b>}
               </td>
               <td>{v.dropPct.toFixed(1)}%</td>
             </tr>

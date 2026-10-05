@@ -521,6 +521,8 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
   white-space: nowrap;
 }
 .node .voltmeter.bad { color: #ff4d4d; }
+.node .voltmeter.three { display: flex; gap: 2px; padding: 0; background: none; border: none; outline: none; box-shadow: none; }
+.node .voltmeter.three .lcd { outline: 1px solid #2b3036; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 .voltage-report .row { justify-content: space-between; flex-wrap: wrap; }
 .table tr.bad-row td { color: #c62828; }
 /* Report tabs: keep on one line and scroll horizontally when they do not fit. */
@@ -547,7 +549,7 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 }
 .node .ktp-row { display: flex; align-items: center; gap: 2px; }
 .node .ktp-row b { width: 40px; font: 700 8px/1 system-ui, sans-serif; color: #2b3036; }
-.node .ktp-row .lcd {
+.node .lcd {
   font: 700 10px/12px 'Courier New', ui-monospace, monospace;
   font-style: normal;
   min-width: 26px;
@@ -558,10 +560,10 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
   border: 1px solid #2b3036;
   border-radius: 2px;
 }
-.node .ktp-row .lcd.bad { color: #ff4d4d; }
-.node .ktp-row .lcd.ph-A { border-top: 2px solid #f2c200; }
-.node .ktp-row .lcd.ph-B { border-top: 2px solid #1f9d3a; }
-.node .ktp-row .lcd.ph-C { border-top: 2px solid #d62828; }
+.node .lcd.bad { color: #ff4d4d; }
+.node .lcd.ph-A { border-top: 2px solid #f2c200; }
+.node .lcd.ph-B { border-top: 2px solid #1f9d3a; }
+.node .lcd.ph-C { border-top: 2px solid #d62828; }
 .ktp-readings { display: grid; gap: 2px; font-size: 12px; margin-top: 6px; }
 .tap-seg button { padding: 4px 6px; font-size: 12px; }
 .ktp-summary { cursor: pointer; background: #f3f6f9; border-radius: 6px; padding: 4px 6px; }
@@ -611,3 +613,12 @@ button.primary:hover:not(:disabled) { background: #1a5fcc; }
 .contour-center:not(.rotate) { cursor: move; touch-action: none; }
 .contour-center.rotate { background: #ff9800; border-color: #e65100; color: #fff; }
 .contour-vertex.rotate { border-color: #ff9800; cursor: grab; }
+
+/* Per-phase loads of a three-phase house. */
+.phase-loads { margin: 4px 0 8px; }
+.phase-loads-table input.num { width: 100%; min-width: 48px; }
+.phase-loads-table th { text-align: center; }
+.phase-tag { display: inline-block; min-width: 20px; padding: 0 4px; border-radius: 3px; color: #fff; font-weight: 700; }
+.phase-tag.phase-A { background: #f2c200; color: #222; }
+.phase-tag.phase-B { background: #1f9d3a; }
+.phase-tag.phase-C { background: #d62828; }

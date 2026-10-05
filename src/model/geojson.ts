@@ -8,7 +8,7 @@
  *   line:  { kind, id, from, to, suspension, wires: [{id, fromPort, toPort}], mark }
  * Tracing results are exported to properties.trace (ignored on import).
  */
-import type { LineKind, LngLat, MapView, NodeKind, Role, Scheme, SchemeLine, SchemeNode } from './types';
+import type { LineKind, LngLat, LoadKind, MapView, NodeKind, PhaseLoads, Role, Scheme, SchemeLine, SchemeNode } from './types';
 import { centroid, createNode, distanceMeters, emptyScheme, normalizeAngle } from './scheme';
 import { CONDUCTORS } from './conductors';
 import { TAP_POSITIONS } from './transformers';
@@ -201,6 +201,16 @@ export function importGeoJSON(input: unknown): ImportResult {
   return { scheme, view, name: typeof data.name === 'string' ? data.name : undefined, photos, warnings };
 }
 
+function sanitizePhaseLoads(v: unknown, mode: string): PhaseLoads | null {
+  if (mode !== '3' || !v || typeof v !== 'object') return null;
+  const src = v as Json;
+  const part = (k: LoadKind) => {
+    const o = (src[k] ?? {}) as Json;
+    return { A: str(o.A), B: str(o.B), C: str(o.C) };
+  };
+  return { design: part('design'), current: part('current') };
+}
+
 function snap(scheme: Scheme, c: LngLat): string | null {
   let best: string | null = null;
   let bestD = 3;
@@ -277,6 +287,7 @@ function sanitizeNode(node: SchemeNode): void {
       node.addressSource = node.addressSource === 'geocoder' || node.addressSource === 'manual' ? node.addressSource : null;
       node.designPowerKw = str(node.designPowerKw);
       node.currentPowerKw = str(node.currentPowerKw);
+      node.phaseLoads = sanitizePhaseLoads(node.phaseLoads, node.phaseMode);
       break;
   }
 }

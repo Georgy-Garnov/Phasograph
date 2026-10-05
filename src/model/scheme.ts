@@ -6,6 +6,8 @@ import type {
   InsulatorType,
   KtpNode,
   LineKind,
+  LoadKind,
+  Phase,
   LngLat,
   NodeKind,
   PoleNode,
@@ -82,6 +84,7 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
         manualPhase: null,
         designPowerKw: '',
         currentPowerKw: '',
+        phaseLoads: null,
       };
   }
 }
@@ -582,6 +585,45 @@ export function routeLines(scheme: Scheme, lineId: string, feedersOf?: (line: Sc
     }
   }
   return [...found];
+}
+
+// ---------- Per-phase loads of a three-phase house ----------
+
+const kwNumber = (s: string) => {
+  const v = Number(String(s).replace(',', '.'));
+  return Number.isFinite(v) && v > 0 ? v : 0;
+};
+const kwText = (v: number) => (v > 0 ? String(Math.round(v * 100) / 100) : '');
+
+/** Total of the per-phase loads as the house total field. */
+function syncLoadTotals(house: HouseNode) {
+  if (!house.phaseLoads) return;
+  const sum = (k: LoadKind) => kwText(PHASE_LIST.reduce((s, p) => s + kwNumber(house.phaseLoads![k][p]), 0));
+  house.designPowerKw = sum('design');
+  house.currentPowerKw = sum('current');
+}
+
+const PHASE_LIST: Phase[] = ['A', 'B', 'C'];
+
+/** Turns per-phase loads on (each total split equally over A, B, C) or off (the totals stay). */
+export function setPerPhaseLoads(house: HouseNode, on: boolean): void {
+  if (!on) {
+    house.phaseLoads = null;
+    return;
+  }
+  if (house.phaseLoads) return;
+  const split = (total: string) => {
+    const each = kwText(kwNumber(total) / 3);
+    return { A: each, B: each, C: each };
+  };
+  house.phaseLoads = { design: split(house.designPowerKw), current: split(house.currentPowerKw) };
+}
+
+/** Sets the load of one phase and updates the house total. */
+export function setPhaseLoad(house: HouseNode, kind: LoadKind, phase: Phase, value: string): void {
+  if (!house.phaseLoads) return;
+  house.phaseLoads[kind][phase] = value;
+  syncLoadTotals(house);
 }
 
 // ---------- House outline changes ----------

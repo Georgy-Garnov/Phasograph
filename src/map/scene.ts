@@ -194,6 +194,11 @@ export function buildPreview(state: AppState, cursor: LngLat | null): Map<string
 /** Mini digital voltmeter under a house: three digits in a frame, red when out of the ±10% range. */
 function voltmeter(v: HouseVoltage): string {
   const title = v.phases.map((p) => `${p.phase}: ${p.voltage.toFixed(1)} ${t('unit.v')}`).join(', ');
+  // Three-phase house: one display per phase, marked with the phase color.
+  if (v.phases.length > 1) {
+    const cells = v.phases.map((p) => lcd(String(Math.round(p.voltage)), p.voltage < VOLTAGE_MIN || p.voltage > VOLTAGE_MAX, p.phase));
+    return `<span class="voltmeter three" title="${escapeHtml(title)}">${cells.join('')}</span>`;
+  }
   return `<span class="voltmeter${v.ok ? '' : ' bad'}" title="${escapeHtml(title)}">${Math.round(v.voltage)}</span>`;
 }
 

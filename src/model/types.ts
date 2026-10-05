@@ -142,7 +142,15 @@ export interface HouseNode extends NodeBase {
   designPowerKw: string;
   /** Current consumption, kW (string as typed). */
   currentPowerKw: string;
+  /**
+   * Three-phase house: design and current load per phase, kW (strings as typed); null — the totals are split
+   * equally over A, B, C. While set, designPowerKw/currentPowerKw are kept equal to the per-phase sums.
+   */
+  phaseLoads: PhaseLoads | null;
 }
+
+export type LoadKind = 'design' | 'current';
+export type PhaseLoads = Record<LoadKind, Record<Phase, string>>;
 
 export type SchemeNode = KtpNode | PoleNode | EntryNode | HouseNode;
 

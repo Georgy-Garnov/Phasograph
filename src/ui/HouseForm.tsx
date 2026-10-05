@@ -1,7 +1,7 @@
 import { store, useStore } from '../model/store';
-import type { HouseNode, Phase, PhaseMode } from '../model/types';
+import type { HouseNode, LoadKind, Phase, PhaseMode } from '../model/types';
 import { PHASES } from '../model/constants';
-import { distanceMeters, linesAt, uid } from '../model/scheme';
+import { distanceMeters, linesAt, setPerPhaseLoads, setPhaseLoad, uid } from '../model/scheme';
 import { cancelContourEdit, finishContourEdit, refreshAddress, startContourEdit } from '../map/interactions';
 import type { HouseStatus, HouseTrace } from '../topology/trace';
 import { Field, KtpDistanceInfo, NodeLink, RoleChip, Section, editNode, editScheme } from './common';
@@ -32,6 +32,7 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
       if (h?.kind !== 'house') return;
       h.phaseMode = mode;
       if (mode === '3') h.manualPhase = null;
+      else h.phaseLoads = null;
       // Adjust the number of service drop wires: 1-phase — phase + neutral, 3-phase — A, B, C, N.
       const want = mode === '3' ? 4 : 2;
       for (const l of Object.values(d.lines)) {
@@ -89,6 +90,8 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
             inputMode="decimal"
             value={house.designPowerKw}
             placeholder="15"
+            readOnly={!!house.phaseLoads}
+            title={house.phaseLoads ? tr('house.sumOfPhases') : undefined}
             onChange={(e) => editNode(house.id, 'house', (h) => void (h.designPowerKw = e.target.value), 'designPower')}
           />
         </Field>
@@ -97,10 +100,13 @@ export function HouseForm({ house, compact = false }: { house: HouseNode; compac
             inputMode="decimal"
             value={house.currentPowerKw}
             placeholder="2.5"
+            readOnly={!!house.phaseLoads}
+            title={house.phaseLoads ? tr('house.sumOfPhases') : undefined}
             onChange={(e) => editNode(house.id, 'house', (h) => void (h.currentPowerKw = e.target.value), 'currentPower')}
           />
         </Field>
       </div>
+      {house.phaseMode === '3' && <PhaseLoadsEditor house={house} />}
 
       {house.phaseMode === '1' ? (
         <Field label={tr('house.phase')}>
@@ -260,6 +266,59 @@ function ContourEditButtons({ houseId }: { houseId: string }) {
         </>
       ) : (
         <button onClick={() => startContourEdit(houseId)}>✏ {tr('contour.edit')}</button>
+      )}
+    </div>
+  );
+}
+
+/** Three-phase house: optional design and current load of each phase (otherwise the totals are split equally). */
+function PhaseLoadsEditor({ house }: { house: HouseNode }) {
+  useT();
+  const loads = house.phaseLoads;
+  return (
+    <div className="phase-loads">
+      <label className="checks">
+        <input
+          type="checkbox"
+          checked={!!loads}
+          onChange={(e) => editNode(house.id, 'house', (h) => setPerPhaseLoads(h, e.target.checked))}
+        />
+        {tr('house.perPhase')}
+      </label>
+      {loads ? (
+        <table className="table phase-loads-table">
+          <thead>
+            <tr>
+              <th />
+              {PHASES.map((p) => (
+                <th key={p}>
+                  <span className={`phase-tag phase-${p}`}>{p}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(['design', 'current'] as LoadKind[]).map((k) => (
+              <tr key={k}>
+                <td className="small">{tr(k === 'design' ? 'house.perPhaseDesign' : 'house.perPhaseCurrent')}</td>
+                {PHASES.map((p) => (
+                  <td key={p}>
+                    <input
+                      inputMode="decimal"
+                      className="num"
+                      value={loads[k][p]}
+                      onChange={(e) =>
+                        editNode(house.id, 'house', (h) => setPhaseLoad(h, k, p as Phase, e.target.value), `${k}:${p}`)
+                      }
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <small className="muted">{tr('house.perPhaseOff')}</small>
       )}
     </div>
   );

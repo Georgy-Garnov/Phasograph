@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createLine, createNode, emptyScheme } from '../model/scheme';
+import { createLine, createNode, emptyScheme, setPerPhaseLoads, setPhaseLoad } from '../model/scheme';
+import { exportGeoJSON, importGeoJSON } from '../model/geojson';
 import type { HouseNode, KtpNode, PoleNode, Role, Scheme } from '../model/types';
 import { portKey, traceScheme } from './trace';
 import { COS_PHI, computeVoltages } from './voltage';
@@ -82,6 +83,41 @@ describe('voltage drop', () => {
     const onB = house(s, poles[0], 'B', 0);
     const v = computeVoltages(s, traceScheme(s), 'current').houses.get(onB.id)!;
     expect(Math.abs(v.voltage - LV_NOMINAL_PHASE)).toBeGreaterThan(1);
+  });
+});
+
+describe('three-phase house with per-phase loads', () => {
+  it('splits the total equally, keeps the total equal to the sum, and loads each phase separately', () => {
+    const { s, ktp, poles } = grid([60]);
+    const h = house(s, poles[0], '3', 12);
+    setPerPhaseLoads(h, true);
+    expect(h.phaseLoads!.current).toEqual({ A: '4', B: '4', C: '4' });
+    setPhaseLoad(h, 'current', 'A', '9');
+    setPhaseLoad(h, 'current', 'C', '0,5');
+    expect(h.currentPowerKw).toBe('13.5');
+
+    const r = computeVoltages(s, traceScheme(s), 'current');
+    const v = r.houses.get(h.id)!;
+    expect(v.phases.map((p) => p.loadKw)).toEqual([9, 4, 0.5]);
+    expect(v.loadKw).toBe(13.5);
+    const [a, b, c] = v.phases.map((p) => p.voltage);
+    expect(a).toBeLessThan(b);
+    expect(b).toBeLessThan(c);
+    expect(r.ktps.get(ktp.id)!.currents.A).toBeCloseTo(9000 / (230 * COS_PHI), 6);
+
+    // Back to one total: split equally again.
+    setPerPhaseLoads(h, false);
+    const even = computeVoltages(s, traceScheme(s), 'current').houses.get(h.id)!;
+    expect(even.phases.map((p) => p.loadKw)).toEqual([4.5, 4.5, 4.5]);
+  });
+
+  it('per-phase loads survive GeoJSON export and import', () => {
+    const { s, poles } = grid([30]);
+    const h = house(s, poles[0], '3', 6);
+    setPerPhaseLoads(h, true);
+    setPhaseLoad(h, 'design', 'B', '7');
+    const back = importGeoJSON(JSON.parse(JSON.stringify(exportGeoJSON(s)))).scheme.nodes[h.id] as HouseNode;
+    expect(back.phaseLoads).toEqual(h.phaseLoads);
   });
 });
 

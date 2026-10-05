@@ -26,9 +26,9 @@ export const VOLTAGE_MAX = 253;
 export type LoadMode = 'current' | 'design';
 
 export interface HouseVoltage {
-  /** Voltage on each phase the house uses, V. */
-  phases: { phase: Phase; voltage: number }[];
-  /** Lowest of them (shown on the voltmeter). */
+  /** Voltage and load on each phase the house uses, V and kW. */
+  phases: { phase: Phase; voltage: number; loadKw: number }[];
+  /** Lowest of them (the single-phase voltmeter; three-phase houses show one per phase). */
   voltage: number;
   /** Drop relative to the substation busbar voltage, %. */
   dropPct: number;
@@ -93,7 +93,7 @@ interface FeederTree {
   order: string[];
   parent: Map<string, { node: string; line: SchemeLine }>;
   branch: Map<string, Triple>;
-  houses: { house: HouseNode; at: string; phases: Phase[]; kw: number }[];
+  houses: { house: HouseNode; at: string; phases: Phase[]; kw: number; perPhase: Record<Phase, number> }[];
 }
 
 export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): VoltageResult {
@@ -146,10 +146,14 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         const phases = house.phaseMode === '3' ? PHASES : ht.effectivePhases.slice(0, 1);
         if (!phases.length) continue;
         const kw = houseLoadKw(house, mode);
-        feederHouses.push({ house, at, phases, kw });
+        // A three-phase house with per-phase loads; otherwise the total is split equally.
+        const split = house.phaseMode === '3' ? house.phaseLoads?.[mode] : undefined;
+        const perPhase = { A: 0, B: 0, C: 0 };
+        for (const p of phases) perPhase[p] = split ? parseKw(split[p]) : kw / phases.length;
+        feederHouses.push({ house, at, phases, kw: split ? perPhase.A + perPhase.B + perPhase.C : kw, perPhase });
         const t = loads.get(at) ?? zeroTriple();
         for (const p of phases) {
-          const amps = (kw * 1000) / phases.length / (NOMINAL_VOLTAGE * COS_PHI);
+          const amps = (perPhase[p] * 1000) / (NOMINAL_VOLTAGE * COS_PHI);
           t[p] = add(t[p], polar(amps, PHASE_ANGLE[p] - phiDeg));
         }
         loads.set(at, t);
@@ -207,16 +211,16 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         volts.set(id, v);
       }
 
-      for (const { house, at, phases, kw } of feederHouses) {
+      for (const { house, at, phases, kw, perPhase } of feederHouses) {
         const v = volts.get(at)!;
-        const perPhase = phases.map((p) => ({ phase: p, voltage: abs(v[p]) }));
-        const voltage = Math.min(...perPhase.map((x) => x.voltage));
+        const readings = phases.map((p) => ({ phase: p, voltage: abs(v[p]), loadKw: perPhase[p] }));
+        const voltage = Math.min(...readings.map((x) => x.voltage));
         houses.set(house.id, {
-          phases: perPhase,
+          phases: readings,
           voltage,
           dropPct: ((u0 - voltage) / NOMINAL_VOLTAGE) * 100,
           loadKw: kw,
-          ok: voltage >= VOLTAGE_MIN && voltage <= VOLTAGE_MAX,
+          ok: readings.every((x) => x.voltage >= VOLTAGE_MIN && x.voltage <= VOLTAGE_MAX),
         });
       }
     }
