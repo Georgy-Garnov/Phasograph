@@ -9,6 +9,7 @@ import { feederLengths } from '../topology/distances';
 import { formatLength } from '../i18n/labels';
 import { currentLocale, useT, type MessageKey } from '../i18n';
 import { confirmDialog } from './dialog';
+import { KTP_GROUND_OHM } from '../model/earthing';
 
 const ROLES: OutputRole[] = ['A', 'B', 'C', 'N', 'L', 'SIP'];
 
@@ -238,6 +239,15 @@ function TransformerSection({ ktp }: { ktp: KtpNode }) {
             ))}
           </div>
         </Field>
+        <Field label={t('ktp.groundOhm')}>
+          <input
+            inputMode="decimal"
+            value={ktp.groundOhm}
+            placeholder={String(KTP_GROUND_OHM)}
+            title={t('ktp.groundOhmTitle')}
+            onChange={(e) => editNode(ktp.id, 'ktp', (k) => void (k.groundOhm = e.target.value), 'groundOhm')}
+          />
+        </Field>
       </div>
       <p className="muted small">{t('ktp.tapHelp')}</p>
       {reading && (
@@ -260,6 +270,9 @@ function TransformerSection({ ktp }: { ktp: KtpNode }) {
           <div>
             {t('ktp.hvReading')}: {fmt(reading.hvVoltage / 1000, 2)} {t('unit.kv')} · {fmt(reading.hvCurrent, 2)} {t('unit.a')}
           </div>
+          {reading.groundAmps > 0.005 && (
+            <div>{t('ktp.groundReading', { a: fmt(reading.groundAmps, 2), v: fmt(reading.neutralV, 1) })}</div>
+          )}
         </div>
       )}
     </Section>

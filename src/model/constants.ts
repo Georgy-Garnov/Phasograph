@@ -14,6 +14,11 @@ export const ROLE_COLORS: Record<Role, string> = {
 export const COLOR_UNTRACED = '#9aa3ad';
 /** Wire inside an ABC bundle: feeder is known, phase is not. */
 export const COLOR_BUNDLE = '#30343a';
+/** Earth symbol (the ⏚ glyph is missing from many fonts). */
+export const EARTH_ICON_SVG =
+  '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M6 0.5V6M1 6h10M3 8.5h6M5 11h2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>';
+/** Trench of an underground service drop on the map. */
+export const TRENCH_COLOR = '#7a5230';
 /** Conflict (short circuit: different phases arrived on one wire). */
 export const COLOR_CONFLICT = '#ff00c8';
 

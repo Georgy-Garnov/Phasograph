@@ -246,6 +246,7 @@ function HouseVoltageInfo({ houseId }: { houseId: string }) {
         ({v.dropPct >= 0 ? '−' : '+'}
         {Math.abs(v.dropPct).toFixed(1)}%)
       </span>
+      {v.neutralV >= 0.5 && <span className="muted">{tr('voltage.neutralV', { v: v.neutralV.toFixed(1) })}</span>}
     </div>
   );
 }

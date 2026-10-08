@@ -4,7 +4,7 @@
  */
 import type { SchemeLine } from './types';
 
-export type ConductorGroup = 'bareAl' | 'bareAs' | 'bareCu' | 'sipMain' | 'sipDrop';
+export type ConductorGroup = 'bareAl' | 'bareAs' | 'bareCu' | 'sipMain' | 'sipDrop' | 'cable';
 
 export interface Conductor {
   id: string;
@@ -48,18 +48,31 @@ const list: Conductor[] = [
   { id: 'SIP4-4x16', label: 'СИП-4 4×16', group: 'sipDrop', r: 1.91, x: 0.09 },
   { id: 'SIP4-2x25', label: 'СИП-4 2×25', group: 'sipDrop', r: 1.2, x: 0.09 },
   { id: 'SIP4-4x25', label: 'СИП-4 4×25', group: 'sipDrop', r: 1.2, x: 0.09 },
+  // Armoured cables in the ground (underground drops): close cores → low reactance.
+  { id: 'AVBbShv-2x16', label: 'АВБбШв 2×16', group: 'cable', r: 1.94, x: 0.068 },
+  { id: 'AVBbShv-4x16', label: 'АВБбШв 4×16', group: 'cable', r: 1.94, x: 0.068 },
+  { id: 'AVBbShv-4x25', label: 'АВБбШв 4×25', group: 'cable', r: 1.24, x: 0.066 },
+  { id: 'AVBbShv-4x35', label: 'АВБбШв 4×35', group: 'cable', r: 0.89, x: 0.064 },
+  { id: 'VBbShv-4x10', label: 'ВБбШв 4×10', group: 'cable', r: 1.84, x: 0.073 },
+  { id: 'VBbShv-4x16', label: 'ВБбШв 4×16', group: 'cable', r: 1.15, x: 0.068 },
 ];
 
 export const CONDUCTORS: Record<string, Conductor> = Object.fromEntries(list.map((c) => [c.id, c]));
-export const CONDUCTOR_GROUPS: ConductorGroup[] = ['bareAl', 'bareAs', 'bareCu', 'sipMain', 'sipDrop'];
+export const CONDUCTOR_GROUPS: ConductorGroup[] = ['bareAl', 'bareAs', 'bareCu', 'sipMain', 'sipDrop', 'cable'];
 export const conductorsOf = (group: ConductorGroup) => list.filter((c) => c.group === group);
 
-/** Default conductor for a line when none is chosen: A-35 bare main line, SIP-2 3×50 ABC, SIP-4 2×16 drop. */
-export function defaultConductorId(line: Pick<SchemeLine, 'kind' | 'suspension'>): string {
+type ConductorLine = Pick<SchemeLine, 'kind' | 'suspension'> & Partial<Pick<SchemeLine, 'underground' | 'wires'>>;
+
+/**
+ * Default conductor for a line when none is chosen: A-35 bare main line, SIP-2 3×50 ABC, SIP-4 2×16 overhead drop,
+ * an armoured aluminium cable 2×16 / 4×16 for an underground drop.
+ */
+export function defaultConductorId(line: ConductorLine): string {
+  if (line.kind === 'drop' && line.underground) return (line.wires?.length ?? 2) >= 4 ? 'AVBbShv-4x16' : 'AVBbShv-2x16';
   if (line.kind === 'drop') return 'SIP4-2x16';
   return line.suspension === 'sip' ? 'SIP2-3x50+54.6' : 'A-35';
 }
 
-export function conductorOf(line: Pick<SchemeLine, 'kind' | 'suspension' | 'conductor'>): Conductor {
+export function conductorOf(line: ConductorLine & Pick<SchemeLine, 'conductor'>): Conductor {
   return CONDUCTORS[line.conductor ?? ''] ?? CONDUCTORS[defaultConductorId(line)];
 }

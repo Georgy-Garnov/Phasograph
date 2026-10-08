@@ -11,7 +11,8 @@ import { confirmDialog } from './dialog';
 import { portMark, setPortMark } from '../model/sip';
 import { HouseForm } from './HouseForm';
 import { Field, MarkSelect, NodeLink, Section, TraceChip, editScheme } from './common';
-import { cachedDistances, lineLength } from '../topology/distances';
+import { cachedDistances, lineLength, planLength } from '../topology/distances';
+import { UNDERGROUND_DEFAULTS, emptyUnderground, undergroundExtraM } from '../model/earthing';
 
 function editLine(id: string, fn: (l: SchemeLine) => void, coalesce?: string) {
   editScheme((d) => {
@@ -47,6 +48,15 @@ function LineStats({ line }: { line: SchemeLine }) {
     <div className="stats">
       <span>
         {line.kind === 'drop' ? t('line.dropLength') : t('line.spanLength')}: <b>{formatLength(lineLength(scheme, line))}</b>
+        {line.kind === 'drop' && line.underground && (
+          <span className="muted">
+            {' '}
+            {t('line.lengthUnderground', {
+              plan: formatLength(planLength(scheme, line)),
+              extra: formatLength(undergroundExtraM(line.underground)),
+            })}
+          </span>
+        )}
       </span>
       {near !== null && far !== null ? (
         <span>
@@ -194,6 +204,8 @@ export function LineEditor({ line }: { line: SchemeLine }) {
         </div>
       </Section>
 
+      {isDrop && <UndergroundSection line={line} />}
+
       {isDrop && isPole(from) && (
         <Section title={t('drop.onPole')}>
           <p className="muted">
@@ -320,5 +332,47 @@ export function LineEditor({ line }: { line: SchemeLine }) {
         <textarea rows={2} value={line.note} onChange={(e) => editLine(line.id, (l) => void (l.note = e.target.value), 'note')} />
       </Section>
     </>
+  );
+}
+
+/** Service drop laid underground: down the pole, through a trench, up the wall to the entry. */
+function UndergroundSection({ line }: { line: SchemeLine }) {
+  const t = useT();
+  const u = line.underground;
+  const field = (key: keyof NonNullable<SchemeLine['underground']>, label: MessageKey) => (
+    <Field label={t(label)}>
+      <input
+        inputMode="decimal"
+        value={u?.[key] ?? ''}
+        placeholder={String(UNDERGROUND_DEFAULTS[key])}
+        onChange={(e) =>
+          editLine(line.id, (l) => {
+            if (l.underground) l.underground[key] = e.target.value;
+          }, `ug-${key}`)
+        }
+      />
+    </Field>
+  );
+  return (
+    <Section title={t('line.undergroundSection')}>
+      <label className="checks">
+        <input
+          type="checkbox"
+          checked={!!u}
+          onChange={(e) => editLine(line.id, (l) => void (l.underground = e.target.checked ? emptyUnderground() : null))}
+        />
+        {t('line.underground')}
+      </label>
+      {u && (
+        <>
+          <div className="grid3">
+            {field('poleHeightM', 'line.ugPole')}
+            {field('depthM', 'line.ugDepth')}
+            {field('entryHeightM', 'line.ugEntry')}
+          </div>
+          <p className="muted small">{t('line.undergroundHelp')}</p>
+        </>
+      )}
+    </Section>
   );
 }

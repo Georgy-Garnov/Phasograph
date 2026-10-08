@@ -15,7 +15,9 @@ import {
 import { portKey } from '../topology/trace';
 import { SIP_CORE_TYPES, coreMarkings, corePort, polePorts, portMark, setPortMark } from '../model/sip';
 import { addSipClamp, setInsulatorKind } from '../model/sipOps';
-import { COLOR_UNTRACED, ROLE_COLORS } from '../model/constants';
+import { COLOR_UNTRACED, EARTH_ICON_SVG, ROLE_COLORS } from '../model/constants';
+import { REGROUND_OHM } from '../model/earthing';
+import { cachedVoltages } from '../topology/voltage';
 import { setPoleAzimuth } from '../map/interactions';
 import { PoleDiagram } from './PoleDiagram';
 import { confirmDialog } from './dialog';
@@ -170,7 +172,17 @@ export function PoleEditor({ pole }: { pole: PoleNode }) {
             />
             {t('pole.fiberBox')}
           </label>
+          <label title={t('pole.reGroundTitle')}>
+            <input
+              type="checkbox"
+              checked={pole.reGround}
+              onChange={(e) => editNode(pole.id, pole.kind, (p) => void (p.reGround = e.target.checked))}
+            />
+            <span className="earth-icon" dangerouslySetInnerHTML={{ __html: EARTH_ICON_SVG }} />
+            {t('pole.reGround')}
+          </label>
         </div>
+        {pole.reGround && <ReGround pole={pole} />}
         <PoleOrientation pole={pole} />
       </Section>
 
@@ -451,6 +463,32 @@ function PoleOrientation({ pole }: { pole: PoleNode }) {
         )}
       </div>
       <p className="muted small">{t('pole.orientHelp')}</p>
+    </div>
+  );
+}
+
+/** Repeated earthing: electrode resistance and the current / neutral potential under the present load. */
+function ReGround({ pole }: { pole: PoleNode }) {
+  const t = useT();
+  const scheme = useStore((s) => s.scheme);
+  const trace = useStore((s) => s.trace);
+  const mode = useStore((s) => s.settings.voltageMode);
+  const g = cachedVoltages(scheme, trace, mode).grounds.get(pole.id);
+  return (
+    <div className="row reground">
+      <span>{t('pole.reGroundOhm')}</span>
+      <input
+        inputMode="decimal"
+        className="num"
+        value={pole.reGroundOhm}
+        placeholder={String(REGROUND_OHM)}
+        onChange={(e) => editNode(pole.id, pole.kind, (p) => void (p.reGroundOhm = e.target.value), 'reGroundOhm')}
+      />
+      {g && (
+        <span className="muted small">
+          {t('pole.reGroundReading', { a: g.amps.toFixed(2), v: g.neutralV.toFixed(1) })}
+        </span>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Insulator, PoleNode } from '../model/types';
 import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, ROLE_COLORS } from '../model/constants';
 import { insLabel, portLabel } from '../i18n/labels';
-import { coreMarkings, corePort, insulatorPorts, markingRibs, portInsulator, splitPort } from '../model/sip';
+import { coreMarkings, corePort, insulatorPorts, markingRibs, polePorts, portInsulator, portMark, splitPort } from '../model/sip';
 import { linesAt } from '../model/scheme';
 import { useStore } from '../model/store';
 import { useT } from '../i18n';
@@ -67,7 +67,9 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
   // Fiber cable hangs at the very bottom, below all insulators.
   const showFiber = pole.hasInternet || pole.fiberBox || linesAt(scheme, pole.id).some((l) => l.kind === 'fiber');
   const fiberSpace = showFiber ? 30 : 0;
-  const height = levels * ROW_H + 40 + lampSpace + fiberSpace;
+  // Repeated earthing: the neutral runs down the pole to an earth electrode drawn at the foot.
+  const groundSpace = pole.reGround ? 26 : 0;
+  const height = levels * ROW_H + 40 + lampSpace + fiberSpace + groundSpace;
   // Side margins for "L5 Ph? ✎" labels: width is based on the longest label so it is not clipped.
   const labelPx = (i: Insulator) => labelText(i, roleText(i)).length * 7 + (i.mark ? 14 : 0) + halfWidth(i);
   const longest = Math.max(30, ...pole.insulators.map(labelPx));
@@ -75,8 +77,8 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
   const margin = Math.max(0, longest + 6 + 6 - 18);
   const width = ARM * 2 + 2 * margin + 10;
   const cx = width / 2;
-  const y = (pos: number) => height - 20 - fiberSpace - (pos - 0.5) * ROW_H;
-  const yFiber = height - 18;
+  const y = (pos: number) => height - 20 - fiberSpace - groundSpace - (pos - 0.5) * ROW_H;
+  const yFiber = height - 18 - groundSpace;
   const xOf = (ins: Insulator) => (ins.side === 'L' ? cx - ARM + 18 : ins.side === 'R' ? cx + ARM - 18 : cx);
   /** Drawing point of a port: the insulator top, or a core in the cable cross-section. */
   const portXY = (portId: string): [number, number] | null => {
@@ -293,6 +295,29 @@ export function PoleDiagram({ pole, trace, selected = [], pending = null, onClic
           </g>
         );
       })}
+
+      {pole.reGround && (() => {
+        // The earthing conductor starts at the neutral (traced or marked N), otherwise at the lowest insulator.
+        const nPort = polePorts(pole).find((p) => {
+          const t = trace.ports.get(portKey(pole.id, p));
+          return (t?.roles.length === 1 && t.roles[0] === 'N') || portMark(pole, p) === 'N';
+        });
+        const from: [number, number] = (nPort ? portXY(nPort) : null) ?? [cx, y(1)];
+        const gx = cx + 9;
+        const gy = height - 16;
+        return (
+          <g className="reground" pointerEvents="none">
+            <title>{tr('diagram.ground')}</title>
+            <path d={`M${from[0]},${from[1]} L${gx},${from[1] + 6} L${gx},${gy}`} fill="none" stroke="#2e7d32" strokeWidth={2} strokeDasharray="6 3" />
+            {[0, 1, 2].map((k) => (
+              <line key={k} x1={gx - 9 + k * 3} x2={gx + 9 - k * 3} y1={gy + k * 4} y2={gy + k * 4} stroke="#2e7d32" strokeWidth={2} />
+            ))}
+            <text x={gx + 14} y={gy + 6} fontSize={10} fill="#2e7d32" fontWeight={600}>
+              {tr('diagram.ground')}
+            </text>
+          </g>
+        );
+      })()}
 
       {showFiber && (
         <g className="fiber">

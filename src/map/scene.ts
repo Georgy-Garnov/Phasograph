@@ -4,7 +4,7 @@
  */
 import type { AppState } from '../model/store';
 import type { Scheme, LngLat, SchemeLine, SchemeNode, Wire } from '../model/types';
-import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS } from '../model/constants';
+import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS, TRENCH_COLOR, EARTH_ICON_SVG } from '../model/constants';
 import { bearing, destination, entriesOnNewContour, isPole, isWired, poleAzimuth, sortInsulators } from '../model/scheme';
 import { wireKey, type ConductorTrace, type TraceResult } from '../topology/trace';
 import { metersPerPixel, offsetSegment } from './geo';
@@ -266,6 +266,7 @@ function buildMarkers(state: AppState, moved: Map<string, LngLat>): MarkerSpec[]
     }
     const fiberHtml =
       isPole(node) && node.fiberBox ? `<span class="fiber-mark" title="${escapeHtml(t('pole.fiberBox'))}"></span>` : '';
+    const groundHtml = isPole(node) && node.reGround ? `<span class="ground-mark" title="${escapeHtml(t('pole.reGround'))}">${EARTH_ICON_SVG}</span>` : '';
     const photoCount = photoCounts.get(node.id) ?? 0;
     const photoHtml = photoCount
       ? `<span class="photo-mark" title="${escapeHtml(t('scene.photos', { n: photoCount }))}">📷</span>`
@@ -274,7 +275,7 @@ function buildMarkers(state: AppState, moved: Map<string, LngLat>): MarkerSpec[]
       id: node.id,
       coords: moved.get(node.id) ?? node.coords,
       className: classes.join(' '),
-      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}${voltmeterHtml}`,
+      html: `${NODE_ICONS[node.kind] ?? ''}${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}${lampHtml}${photoHtml}${fiberHtml}${groundHtml}${voltmeterHtml}`,
       title: node.kind === 'house' ? node.address || node.name : node.name,
       draggable: tool.type === 'select',
       zIndex: node.kind === 'house' ? 10 : 20,
@@ -312,6 +313,16 @@ function collectLines(
       zIndex: 100,
       target,
     });
+
+    // Underground drop: a brown trench under the drop wires.
+    if (line.kind === 'drop' && line.underground) {
+      specs.set(`trench:${line.id}`, {
+        geometry: { type: 'LineString', coordinates: coords },
+        stroke: { color: TRENCH_COLOR, width: 10, opacity: dim ? 0.25 : 0.7 },
+        zIndex: 205,
+        target,
+      });
+    }
 
     // ABC cable: a black sheath with its cores drawn inside in their phase colors.
     if (isCableSpan(line, a, b)) {

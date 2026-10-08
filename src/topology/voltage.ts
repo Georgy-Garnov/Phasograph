@@ -10,12 +10,20 @@
  * phasor I = P / (U_nom · cos φ) lagging its phase voltage by φ. Branch currents are summed towards the
  * substation; the neutral carries the phasor sum of the phase currents. Phase-to-neutral voltage at the
  * downstream end of a span: V_k = V_k(up) − Z_phase · I_k − Z_neutral · I_N.
+ *
+ * Repeated earthing: when poles bond the neutral to their own earth electrodes, part of the neutral current returns
+ * through the earth to the transformer neutral electrode. The neutral potentials (relative to remote earth) then come
+ * from a nodal analysis of the neutral network: span neutral impedances between nodes, electrode resistances to
+ * earth at the substation and the re-earthed poles, load neutral currents injected at the houses. Phase conductor
+ * potentials keep following the phase currents; a house gets the difference of the two.
  */
 import type { HouseNode, Phase, Scheme, SchemeLine } from '../model/types';
 import { conductorOf } from '../model/conductors';
 import { wireKey, type TraceResult } from './trace';
 import { lineLength } from './distances';
 import { hvActualV, noLoadPhaseVoltage, transformerData, transformerImpedance } from '../model/transformers';
+import { KTP_GROUND_OHM, REGROUND_OHM, positiveOr } from '../model/earthing';
+import { isPole } from '../model/scheme';
 
 export const NOMINAL_VOLTAGE = 230;
 export const COS_PHI = 0.95;
@@ -32,6 +40,8 @@ export interface HouseVoltage {
   voltage: number;
   /** Drop relative to the substation busbar voltage, %. */
   dropPct: number;
+  /** Potential of the neutral at the entry relative to earth, V (the neutral shift seen from the ground). */
+  neutralV: number;
   /** Load used in the calculation, kW. */
   loadKw: number;
   ok: boolean;
@@ -82,23 +92,39 @@ export interface KtpReading {
   hvCurrent: number;
   /** No-load LV phase voltage set by the HV supply and the tap position, V. */
   noLoadVoltage: number;
+  /** Current through the transformer neutral earth electrode, A (0 without repeated earthing). */
+  groundAmps: number;
+  /** Potential of the transformer neutral relative to earth, V. */
+  neutralV: number;
+}
+
+/** Repeated earthing on a pole under load. */
+export interface GroundReading {
+  /** Current through the pole's earth electrode, A. */
+  amps: number;
+  /** Potential of the neutral on the pole relative to earth, V. */
+  neutralV: number;
 }
 
 export interface VoltageResult {
   houses: Map<string, HouseVoltage>;
   ktps: Map<string, KtpReading>;
+  /** Re-earthed poles fed by a substation. */
+  grounds: Map<string, GroundReading>;
 }
 
 interface FeederTree {
   order: string[];
   parent: Map<string, { node: string; line: SchemeLine }>;
   branch: Map<string, Triple>;
+  feederId: string;
   houses: { house: HouseNode; at: string; phases: Phase[]; kw: number; perPhase: Record<Phase, number> }[];
 }
 
 export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMode): VoltageResult {
   const houses = new Map<string, HouseVoltage>();
   const ktps = new Map<string, KtpReading>();
+  const grounds = new Map<string, GroundReading>();
   const phiDeg = (Math.acos(COS_PHI) * 180) / Math.PI;
 
   // Service entry → house, to attach houses fed through an entry point.
@@ -166,7 +192,7 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
         const u = branch.get(parent.get(order[i])!.node)!;
         for (const p of PHASES) u[p] = add(u[p], t[p]);
       }
-      trees.push({ order, parent, branch, houses: feederHouses });
+      trees.push({ order, parent, branch, feederId: feeder.id, houses: feederHouses });
     }
 
     // 2. Transformer: total current of all feeders, busbar voltage behind the short-circuit impedance.
@@ -177,6 +203,10 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
     const zT: C = data ? transformerImpedance(data) : ZERO;
     const bus: Triple = { A: ZERO, B: ZERO, C: ZERO };
     for (const p of PHASES) bus[p] = sub(polar(u0, PHASE_ANGLE[p]), mul(zT, iBus[p]));
+
+    // 3. Neutral potentials relative to earth (nodal analysis when poles re-earth the neutral).
+    const neutral = neutralPotentials(scheme, ktp.id, trees);
+    const nKtp = neutral.get(ktp.id) ?? ZERO;
 
     const voltages = { A: abs(bus.A), B: abs(bus.B), C: abs(bus.C) };
     const currents = { A: abs(iBus.A), B: abs(iBus.B), C: abs(iBus.C) };
@@ -191,29 +221,34 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
       // Losses are neglected: the HV side delivers the same apparent power.
       hvCurrent: apparentVa / (Math.sqrt(3) * hvVoltage),
       noLoadVoltage: u0,
+      groundAmps: abs(nKtp) / positiveOr(ktp.groundOhm, KTP_GROUND_OHM),
+      neutralV: abs(nKtp),
     });
 
-    // 3. Feeders: walk from the busbars downwards.
-    for (const { order, parent, branch, houses: feederHouses } of trees) {
-      const volts = new Map<string, Triple>([[ktp.id, bus]]);
+    // 4. Feeders: phase conductor potentials walk down from the busbars; the house sees phase minus neutral.
+    for (const { order, parent, branch, feederId, houses: feederHouses } of trees) {
+      const key = neutralKey(scheme, ktp.id, feederId);
+      const phase = new Map<string, Triple>([[ktp.id, { A: add(bus.A, nKtp), B: add(bus.B, nKtp), C: add(bus.C, nKtp) }]]);
       for (let i = 1; i < order.length; i++) {
         const id = order[i];
         const { node: up, line } = parent.get(id)!;
-        const cond = conductorOf(line);
-        const km = lineLength(scheme, line) / 1000;
-        const zPh: C = [cond.r * km, cond.x * km];
-        const zN: C = [(cond.rN ?? cond.r) * km, cond.x * km];
+        const zPh = lineImpedance(scheme, line).phase;
         const i3 = branch.get(id)!;
-        const iN = add(add(i3.A, i3.B), i3.C);
-        const vUp = volts.get(up)!;
-        const v = zeroTriple();
-        for (const p of PHASES) v[p] = sub(sub(vUp[p], mul(zPh, i3[p])), mul(zN, iN));
-        volts.set(id, v);
+        const vUp = phase.get(up)!;
+        phase.set(id, { A: sub(vUp.A, mul(zPh, i3.A)), B: sub(vUp.B, mul(zPh, i3.B)), C: sub(vUp.C, mul(zPh, i3.C)) });
+      }
+      for (const id of order) {
+        const node = scheme.nodes[id];
+        if (isPole(node) && node.reGround) {
+          const vn = neutral.get(key(id)) ?? ZERO;
+          grounds.set(id, { neutralV: abs(vn), amps: abs(vn) / positiveOr(node.reGroundOhm, REGROUND_OHM) });
+        }
       }
 
       for (const { house, at, phases, kw, perPhase } of feederHouses) {
-        const v = volts.get(at)!;
-        const readings = phases.map((p) => ({ phase: p, voltage: abs(v[p]), loadKw: perPhase[p] }));
+        const vp = phase.get(at)!;
+        const vn = neutral.get(key(at)) ?? ZERO;
+        const readings = phases.map((p) => ({ phase: p, voltage: abs(sub(vp[p], vn)), loadKw: perPhase[p] }));
         const voltage = Math.min(...readings.map((x) => x.voltage));
         houses.set(house.id, {
           phases: readings,
@@ -221,11 +256,12 @@ export function computeVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMo
           dropPct: ((u0 - voltage) / NOMINAL_VOLTAGE) * 100,
           loadKw: kw,
           ok: readings.every((x) => x.voltage >= VOLTAGE_MIN && x.voltage <= VOLTAGE_MAX),
+          neutralV: abs(vn),
         });
       }
     }
   }
-  return { houses, ktps };
+  return { houses, ktps, grounds };
 }
 
 const cache = new WeakMap<TraceResult, Partial<Record<LoadMode, VoltageResult>>>();
@@ -235,4 +271,122 @@ export function cachedVoltages(scheme: Scheme, trace: TraceResult, mode: LoadMod
   let entry = cache.get(trace);
   if (!entry) cache.set(trace, (entry = {}));
   return (entry[mode] ??= computeVoltages(scheme, trace, mode));
+}
+
+/** Phase and neutral impedance of a line, Ω. */
+function lineImpedance(scheme: Scheme, line: SchemeLine): { phase: C; neutral: C } {
+  const cond = conductorOf(line);
+  const km = lineLength(scheme, line) / 1000;
+  return { phase: [cond.r * km, cond.x * km], neutral: [(cond.rN ?? cond.r) * km, cond.x * km] };
+}
+
+/**
+ * Key of a neutral node: feeders have separate neutrals, except at the substation (common star point) and on
+ * re-earthed poles (every neutral on the pole is bonded to the same electrode).
+ */
+function neutralKey(scheme: Scheme, ktpId: string, feederId: string) {
+  return (id: string) => {
+    const node = scheme.nodes[id];
+    return id === ktpId || (isPole(node) && node.reGround) ? id : `${feederId}|${id}`;
+  };
+}
+
+/**
+ * Neutral potentials relative to earth for every neutral node of a substation's feeders.
+ * Without repeated earthing no current flows in the earth: the star point stays at earth potential and each node
+ * rises by the neutral current times the neutral impedance on the way back. Otherwise the neutral network with its
+ * electrodes to earth is solved as a nodal system Y·V = I.
+ */
+function neutralPotentials(scheme: Scheme, ktpId: string, trees: FeederTree[]): Map<string, C> {
+  const result = new Map<string, C>([[ktpId, ZERO]]);
+  const reEarthed = trees.some((t) => t.order.some((id) => {
+    const n = scheme.nodes[id];
+    return isPole(n) && n.reGround;
+  }));
+  const sum3 = (t: Triple) => add(add(t.A, t.B), t.C);
+
+  if (!reEarthed) {
+    for (const { order, parent, branch, feederId } of trees) {
+      const key = neutralKey(scheme, ktpId, feederId);
+      for (let i = 1; i < order.length; i++) {
+        const { node: up, line } = parent.get(order[i])!;
+        const zN = lineImpedance(scheme, line).neutral;
+        result.set(key(order[i]), add(result.get(key(up))!, mul(zN, sum3(branch.get(order[i])!))));
+      }
+    }
+    return result;
+  }
+
+  // Nodal analysis: unknown potentials of all neutral nodes, the earth is the reference.
+  const index = new Map<string, number>();
+  const idx = (k: string) => {
+    if (!index.has(k)) index.set(k, index.size);
+    return index.get(k)!;
+  };
+  idx(ktpId);
+  const edges: [number, number, C][] = [];
+  const injections = new Map<number, C>();
+  const inject = (i: number, c: C) => injections.set(i, add(injections.get(i) ?? ZERO, c));
+  const shunts = new Map<number, number>();
+  const ktp = scheme.nodes[ktpId];
+  shunts.set(0, 1 / positiveOr(ktp?.kind === 'ktp' ? ktp.groundOhm : '', KTP_GROUND_OHM));
+  for (const { order, parent, branch, feederId } of trees) {
+    const key = neutralKey(scheme, ktpId, feederId);
+    for (const id of order) {
+      const node = scheme.nodes[id];
+      const i = idx(key(id));
+      if (isPole(node) && node.reGround) shunts.set(i, 1 / positiveOr(node.reGroundOhm, REGROUND_OHM));
+      if (id === ktpId) continue;
+      const { node: up, line } = parent.get(id)!;
+      const zN = lineImpedance(scheme, line).neutral;
+      // A zero-length span would make the admittance infinite: give it a tiny impedance.
+      edges.push([i, idx(key(up)), invert(abs(zN) > 1e-6 ? zN : [1e-6, 0])]);
+      // Each branch current enters the neutral at its node and leaves at the parent: the net at a node is its own
+      // load current, and the star point takes back the total phase current of all feeders.
+      inject(i, sum3(branch.get(id)!));
+      inject(idx(key(up)), mul([-1, 0], sum3(branch.get(id)!)));
+    }
+  }
+  const n = index.size;
+  const y: C[][] = Array.from({ length: n }, () => Array.from({ length: n }, () => ZERO));
+  for (const [a, b, adm] of edges) {
+    y[a][a] = add(y[a][a], adm);
+    y[b][b] = add(y[b][b], adm);
+    y[a][b] = sub(y[a][b], adm);
+    y[b][a] = sub(y[b][a], adm);
+  }
+  for (const [i, g] of shunts) y[i][i] = add(y[i][i], [g, 0]);
+  const rhs: C[] = Array.from({ length: n }, (_, i) => injections.get(i) ?? ZERO);
+  const v = solveComplex(y, rhs);
+  for (const [k, i] of index) result.set(k, v[i]);
+  return result;
+}
+
+function invert(a: C): C {
+  const d = a[0] * a[0] + a[1] * a[1];
+  return [a[0] / d, -a[1] / d];
+}
+
+/** Gaussian elimination with partial pivoting for a complex linear system. */
+function solveComplex(a: C[][], b: C[]): C[] {
+  const n = b.length;
+  const m = a.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r++) if (abs(m[r][col]) > abs(m[pivot][col])) pivot = r;
+    [m[col], m[pivot]] = [m[pivot], m[col]];
+    const inv = invert(m[col][col]);
+    for (let r = col + 1; r < n; r++) {
+      const f = mul(m[r][col], inv);
+      if (f[0] === 0 && f[1] === 0) continue;
+      for (let c = col; c <= n; c++) m[r][c] = sub(m[r][c], mul(f, m[col][c]));
+    }
+  }
+  const x: C[] = Array.from({ length: n }, () => ZERO);
+  for (let r = n - 1; r >= 0; r--) {
+    let acc = m[r][n];
+    for (let c = r + 1; c < n; c++) acc = sub(acc, mul(m[r][c], x[c]));
+    x[r] = mul(acc, invert(m[r][r]));
+  }
+  return x;
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createLine, createNode, emptyScheme, setPerPhaseLoads, setPhaseLoad } from '../model/scheme';
 import { exportGeoJSON, importGeoJSON } from '../model/geojson';
+import { emptyUnderground } from '../model/earthing';
+import { conductorOf } from '../model/conductors';
+import { lineLength } from './distances';
 import type { HouseNode, KtpNode, PoleNode, Role, Scheme } from '../model/types';
 import { portKey, traceScheme } from './trace';
 import { COS_PHI, computeVoltages } from './voltage';
@@ -118,6 +121,57 @@ describe('three-phase house with per-phase loads', () => {
     setPhaseLoad(h, 'design', 'B', '7');
     const back = importGeoJSON(JSON.parse(JSON.stringify(exportGeoJSON(s)))).scheme.nodes[h.id] as HouseNode;
     expect(back.phaseLoads).toEqual(h.phaseLoads);
+  });
+});
+
+describe('repeated earthing', () => {
+  it('changes nothing without neutral current and nothing without re-earthed poles', () => {
+    const { s, poles } = grid([100, 200]);
+    const h = house(s, poles[1], '3', 15);
+    const before = computeVoltages(s, traceScheme(s), 'current').houses.get(h.id)!;
+    poles[1].reGround = true;
+    const after = computeVoltages(s, traceScheme(s), 'current');
+    expect(after.houses.get(h.id)!.voltage).toBeCloseTo(before.voltage, 9);
+    expect(after.grounds.get(poles[1].id)!.amps).toBeCloseTo(0, 9);
+  });
+
+  it('returns part of an unbalanced neutral current through the earth and lowers the neutral shift', () => {
+    const { s, ktp, poles } = grid([150, 300]);
+    const onA = house(s, poles[1], 'A', 10);
+    const onB = house(s, poles[1], 'B', 0);
+    const t = traceScheme(s);
+    const plain = computeVoltages(s, t, 'current');
+    expect(plain.ktps.get(ktp.id)!.groundAmps).toBe(0);
+
+    poles[1].reGround = true;
+    poles[1].reGroundOhm = '4'; // a good electrode makes the effect visible
+    const earthed = computeVoltages(s, t, 'current');
+    const g = earthed.grounds.get(poles[1].id)!;
+    expect(g.amps).toBeGreaterThan(0.5);
+    // The earth current comes back through the transformer neutral electrode.
+    expect(earthed.ktps.get(ktp.id)!.groundAmps).toBeCloseTo(g.amps, 6);
+    // The neutral at the far end is pulled towards earth: higher voltage on the loaded phase, smaller shift on the other.
+    expect(earthed.houses.get(onA.id)!.voltage).toBeGreaterThan(plain.houses.get(onA.id)!.voltage);
+    expect(earthed.houses.get(onA.id)!.neutralV).toBeLessThan(plain.houses.get(onA.id)!.neutralV);
+    const shift = (r: typeof plain) => Math.abs(r.houses.get(onB.id)!.voltage - LV_NOMINAL_PHASE);
+    expect(shift(earthed)).toBeLessThan(shift(plain));
+  });
+});
+
+describe('underground drop', () => {
+  it('adds the runs down the pole, through the trench and up the wall, and defaults to an armoured cable', () => {
+    const { s, poles } = grid([50]);
+    const h = house(s, poles[0], 'A', 5);
+    const drop = Object.values(s.lines).find((l) => l.kind === 'drop')!;
+    const t = traceScheme(s);
+    const overhead = computeVoltages(s, t, 'current').houses.get(h.id)!.voltage;
+    const plan = lineLength(s, drop);
+    drop.underground = emptyUnderground();
+    expect(lineLength(s, drop)).toBeCloseTo(plan + 6 + 1.5 * 2 + 2, 6);
+    expect(conductorOf(drop).id).toBe('AVBbShv-2x16');
+    drop.underground.depthM = '2';
+    expect(lineLength(s, drop)).toBeCloseTo(plan + 12, 6);
+    expect(computeVoltages(s, t, 'current').houses.get(h.id)!.voltage).not.toBeCloseTo(overhead, 3);
   });
 });
 

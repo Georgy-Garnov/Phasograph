@@ -128,6 +128,7 @@ code { background: #e9edf1; padding: 0 4px; border-radius: 3px; }
 .field > span { font-size: 11px; color: #5c6875; }
 .field input:not([type='checkbox']), .field select { width: 100%; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .row input { flex: 1; }
 .btn-row { display: flex; gap: 4px; }
@@ -653,3 +654,20 @@ button.danger-solid:hover:not(:disabled) { background: #a51f1f; }
 button.primary:hover:not(:disabled) { background: #1a5fcc; }
 @keyframes dialog-fade { from { opacity: 0; } }
 @keyframes dialog-pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+
+/* ---- Repeated earthing ---- */
+.node .ground-mark {
+  position: absolute;
+  left: -13px;
+  bottom: -11px;
+  display: flex;
+  padding: 1px;
+  color: #2e7d32;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.earth-icon { display: inline-flex; vertical-align: -1px; color: #2e7d32; margin-right: 3px; }
+.legend-ground { margin-left: 6px; }
+.row.reground { flex-wrap: wrap; }
+.row.reground input.num { flex: none; width: 64px; }

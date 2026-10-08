@@ -55,7 +55,7 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
   const base = { id: uid(kind), coords, name: '', note: '' };
   switch (kind) {
     case 'ktp':
-      return { ...base, kind, powerKva: '', hvKv: 10, hvActualV: '', tapPct: 0, feeders: [makeFeeder(1)] };
+      return { ...base, kind, powerKva: '', hvKv: 10, hvActualV: '', tapPct: 0, groundOhm: '', feeders: [makeFeeder(1)] };
     case 'pole04':
     case 'pole10':
     case 'poleService':
@@ -69,6 +69,8 @@ export function createNode(kind: NodeKind, coords: LngLat): SchemeNode {
         hasInternet: false,
         fiberBox: false,
         azimuth: null,
+        reGround: false,
+        reGroundOhm: '',
       };
     case 'entry':
       return { ...base, kind, houseId: null };

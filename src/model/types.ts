@@ -49,6 +49,8 @@ export interface KtpNode extends NodeBase {
   hvActualV: string;
   /** Off-circuit tap changer position, % of the HV winding: -5, -2.5, 0, +2.5, +5. */
   tapPct: number;
+  /** Earthing resistance of the transformer neutral, Ω (string as typed; empty = 4 Ω). */
+  groundOhm: string;
   feeders: Feeder[];
 }
 
@@ -118,6 +120,10 @@ export interface PoleNode extends NodeBase {
    * relative to it. null — derived automatically from the spans at the pole (see poleAzimuth).
    */
   azimuth: number | null;
+  /** Repeated earthing: the neutral (PEN) runs down the pole to its own earth electrode. */
+  reGround: boolean;
+  /** Resistance of the repeated earthing electrode, Ω (string as typed; empty = 30 Ω). */
+  reGroundOhm: string;
 }
 
 /** Connection point (service entry) on the house facade. */
@@ -178,6 +184,18 @@ export interface SchemeLine {
   /** Conductor from the catalog used for voltage-drop calculation; null — default for the line type. */
   conductor: string | null;
   note: string;
+  /** Service drop laid underground (otherwise overhead): adds the vertical runs to its length. */
+  underground?: Underground | null;
+}
+
+/** Vertical runs of an underground drop, m (strings as typed; empty = defaults, see model/earthing.ts). */
+export interface Underground {
+  /** Height the cable comes down the pole from. */
+  poleHeightM: string;
+  /** Trench depth. */
+  depthM: string;
+  /** Height of the entry on the wall above the ground. */
+  entryHeightM: string;
 }
 
 export interface Scheme {

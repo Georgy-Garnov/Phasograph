@@ -127,6 +127,18 @@ short-circuit impedance (typical uk and load losses for the rating) carrying the
 the substation a panel of the same mini displays shows busbar voltages and currents per phase, the load in kVA and %
 of the rating, the HV voltage and the HV current. HV poles and lines are labelled 6/10 kV.
 
+**Repeated earthing.** A pole can carry a repeated earthing of the neutral (PEN) with its electrode resistance
+(30 Ω by default, PUE 1.7.103); the transformer neutral electrode is 4 Ω by default (PUE 1.7.101). With re-earthed
+poles the neutral is solved as a nodal network with the earth as a common node, so part of an unbalanced neutral current
+returns through the earth. Phase-to-neutral voltages change only slightly in normal operation, but the neutral potential
+to earth drops noticeably; the pole card shows the electrode current and the neutral potential, the house card the
+neutral-to-earth voltage at the entry.
+
+**Underground drop.** A service drop can be marked as underground: the cable comes down the pole (6 m), runs in a
+trench (1.5 m deep) and rises up the wall to the entry (2 m) — all editable. These vertical runs are added to the drop
+length (and to the voltage calculation); the default conductor becomes an armoured AVBbShv cable. On the map the drop
+gets a brown trench.
+
 ## Data model
 
 `src/model/types.ts`. Nodes (Point): `ktp`, `pole10`, `pole04`, `poleService`, `entry`, `house` (optional outline).

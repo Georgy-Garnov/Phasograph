@@ -1,4 +1,4 @@
-import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS } from '../model/constants';
+import { COLOR_BUNDLE, COLOR_CONFLICT, COLOR_UNTRACED, LINE_STYLES, ROLE_COLORS, TRENCH_COLOR, EARTH_ICON_SVG } from '../model/constants';
 import { useT, type MessageKey } from '../i18n';
 
 interface LegendItem {
@@ -26,6 +26,7 @@ const LINE_LEGEND: LegendItem[] = [
   { label: 'legend.lighting', ...LINE_STYLES.lighting },
   { label: 'legend.fiber', ...LINE_STYLES.fiber },
   { label: 'legend.noWires', color: COLOR_UNTRACED, width: 4, dash: [6, 6] },
+  { label: 'legend.underground', color: TRENCH_COLOR, width: 6 },
 ];
 
 function LegendSample({ item }: { item: LegendItem }) {
@@ -63,6 +64,8 @@ export function Legend() {
           {t('legend.lampOff')}
           <span className="legend-photo">📷</span>
           {t('legend.photo')}
+          <span className="legend-ground earth-icon" dangerouslySetInnerHTML={{ __html: EARTH_ICON_SVG }} />
+          {t('legend.ground')}
         </span>
       </div>
     </div>

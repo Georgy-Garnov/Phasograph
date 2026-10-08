@@ -193,6 +193,10 @@ export function importGeoJSON(input: unknown): ImportResult {
       conductor: typeof p.conductor === 'string' && CONDUCTORS[p.conductor] ? p.conductor : null,
       note: str(p.note),
     };
+    if (line.kind === 'drop' && p.underground && typeof p.underground === 'object') {
+      const u = p.underground as Json;
+      line.underground = { poleHeightM: str(u.poleHeightM), depthM: str(u.depthM), entryHeightM: str(u.entryHeightM) };
+    }
     scheme.lines[id] = line;
   }
   // Older projects: bundle clamps without cores get a core set and their wires are spread over the cores.
@@ -233,6 +237,7 @@ function sanitizeNode(node: SchemeNode): void {
       node.hvKv = Number(node.hvKv) === 6 ? 6 : 10;
       node.hvActualV = str(node.hvActualV);
       node.tapPct = TAP_POSITIONS.includes(Number(node.tapPct)) ? Number(node.tapPct) : 0;
+      node.groundOhm = str(node.groundOhm);
       delete (node as unknown as Json).busVoltage;
       node.feeders = arr<Json>(node.feeders).map((f, fi) => ({
         id: str(f.id, `f${fi + 1}`),
@@ -274,6 +279,8 @@ function sanitizeNode(node: SchemeNode): void {
       delete (node as unknown as Json).hasLighting;
       node.hasInternet = !!node.hasInternet;
       node.fiberBox = !!node.fiberBox;
+      node.reGround = !!node.reGround;
+      node.reGroundOhm = str(node.reGroundOhm);
       node.azimuth = Number.isFinite(Number(node.azimuth)) && node.azimuth !== null ? normalizeAngle(Number(node.azimuth)) : null;
       break;
     case 'entry':

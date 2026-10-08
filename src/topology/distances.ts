@@ -1,15 +1,23 @@
 /** Line lengths and network distances computed from node coordinates. */
 import type { LineKind, Scheme, SchemeLine } from '../model/types';
 import { distanceMeters } from '../model/scheme';
+import { undergroundExtraM } from '../model/earthing';
 import { wireKey, type TraceResult } from './trace';
 
 /** 0.4 kV network lines used to compute the path to the substation. */
 const NETWORK_KINDS: LineKind[] = ['line04', 'drop', 'lighting'];
 
-export function lineLength(scheme: Scheme, line: SchemeLine): number {
+/** Horizontal length of a line between its nodes, m. */
+export function planLength(scheme: Scheme, line: SchemeLine): number {
   const a = scheme.nodes[line.from];
   const b = scheme.nodes[line.to];
   return a && b ? distanceMeters(a.coords, b.coords) : 0;
+}
+
+/** Conductor length: the plan length plus, for an underground drop, the runs down the pole, the trench and up the wall. */
+export function lineLength(scheme: Scheme, line: SchemeLine): number {
+  const plan = planLength(scheme, line);
+  return line.kind === 'drop' && line.underground ? plan + undergroundExtraM(line.underground) : plan;
 }
 
 export interface KtpDistance {
